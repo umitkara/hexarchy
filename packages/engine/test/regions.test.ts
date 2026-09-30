@@ -4,7 +4,7 @@ import { parseFixture } from './fixtures/ascii';
 
 function regionSizes(text: string): number[] {
   const { state } = parseFixture(text);
-  return computeRegions(state.map, state.owners).regions.map((r) => r.tiles.length);
+  return computeRegions(state, state.owners).regions.map((r) => r.tiles.length);
 }
 
 describe('regions (treasury graph)', () => {
@@ -14,7 +14,7 @@ describe('regions (treasury graph)', () => {
         A   .   .   B   .
       .   .   A   A   .
     `);
-    const regions = computeRegions(state.map, state.owners);
+    const regions = computeRegions(state, state.owners);
     expect(regions.regions.map((r) => [r.owner, r.tiles.length])).toEqual([
       [0, 3],
       [1, 3],
@@ -81,10 +81,10 @@ describe('innermostTile', () => {
         .   A   A   .   .
       .   .   .   .   .
     `);
-    const regions = computeRegions(state.map, state.owners);
+    const regions = computeRegions(state, state.owners);
     const region = regions.regions[0];
     if (!region) throw new Error('no region');
-    expect(innermostTile(state.map, regions, region)).toBe(tile(2, 2));
+    expect(innermostTile(state, regions, region)).toBe(tile(2, 2));
   });
 
   it('treats a river side as the region edge', () => {
@@ -97,18 +97,18 @@ describe('innermostTile', () => {
         .   A   A   .   .
       .   .   .   .   .
     `);
-    const regions = computeRegions(state.map, state.owners);
+    const regions = computeRegions(state, state.owners);
     const region = regions.regions[0];
     if (!region) throw new Error('no region');
     expect(region.tiles).toHaveLength(7);
-    expect(innermostTile(state.map, regions, region)).toBe(tile(2, 2));
+    expect(innermostTile(state, regions, region)).toBe(tile(2, 2));
   });
 
   it('breaks full ties by the lowest tile index', () => {
     const { state, tile } = parseFixture('.   A   A   .');
-    const regions = computeRegions(state.map, state.owners);
+    const regions = computeRegions(state, state.owners);
     const region = regions.regions[0];
     if (!region) throw new Error('no region');
-    expect(innermostTile(state.map, regions, region)).toBe(tile(1, 0));
+    expect(innermostTile(state, regions, region)).toBe(tile(1, 0));
   });
 });

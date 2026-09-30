@@ -80,7 +80,10 @@ export interface RegionTurnStart {
   readonly after: Resources;
 }
 
-type EconomyState = Pick<GameState, 'map' | 'owners' | 'centers' | 'units' | 'buildings'>;
+type EconomyState = Pick<
+  GameState,
+  'map' | 'owners' | 'centers' | 'units' | 'buildings' | 'edgeStructures'
+>;
 
 /** What `player`'s turn start would do to each of their regions, in region order. */
 export function turnStartForecast(state: EconomyState, player: PlayerId): RegionTurnStart[] {

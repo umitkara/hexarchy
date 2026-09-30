@@ -26,6 +26,7 @@ describe('buying units (GDD 4.2, 4.4)', () => {
       level: 1,
       exhausted: false,
       hungry: false,
+      suppressed: false,
     });
     expect(eventsOf(events, 'unitBought')).toEqual([
       {
@@ -75,6 +76,7 @@ describe('buying units (GDD 4.2, 4.4)', () => {
       level: 0,
       exhausted: false,
       hungry: false,
+      suppressed: false,
     });
     expect(state.centers[f.tile(0, 0)]?.treasury.gold).toBe(20 - UNITS.worker.cost);
     expect(refusal(f.state, buy(f.tile(0, 0), f.tile(3, 0), 'worker'))).toBe('cannotCapture');
@@ -90,6 +92,7 @@ describe('merging (GDD 6.2)', () => {
       level: 2,
       exhausted: true,
       hungry: false,
+      suppressed: false,
     });
     expect(state.units[f.tile(1, 0)]).toBeUndefined();
     expect(eventsOf(events, 'unitsMerged')).toHaveLength(1);
@@ -104,6 +107,7 @@ describe('merging (GDD 6.2)', () => {
       level: 2,
       exhausted: true,
       hungry: false,
+      suppressed: false,
     });
   });
 

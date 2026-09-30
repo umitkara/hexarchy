@@ -7,21 +7,44 @@ import {
   undo,
   undoTurn,
   validate,
+  type BreachSource,
   type BuildSource,
   type Command,
   type CommandError,
+  type EdgeBuildSource,
   type GameEvent,
   type GameState,
   type PlayerId,
   type Point,
   type TurnHistory,
   type UnitSource,
+  type VolleySource,
 } from '@hexarchy/engine';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
-/** What the player holds to place on the map: a unit (moved or recruited) or a building. */
-export type HandSource = UnitSource | BuildSource;
+/**
+ * What the player holds to use on the map: a unit (moved or recruited), a building, or a
+ * unit action — a worker's edge structure, a strike on a structure, an archer volley.
+ */
+export type HandSource = UnitSource | BuildSource | EdgeBuildSource | BreachSource | VolleySource;
+
+/** A unit action aimed at one of the six edges of the unit's tile (target = the tile across). */
+export type EdgeSource = EdgeBuildSource | BreachSource;
+
+export function isEdgeSource(source: HandSource | null): source is EdgeSource {
+  return source?.kind === 'edge' || source?.kind === 'breach';
+}
+
+/** The tile of the unit that acts, for unit actions (undefined otherwise). */
+export function actingTile(source: HandSource): number | undefined {
+  return source.kind === 'unit' ||
+    source.kind === 'edge' ||
+    source.kind === 'breach' ||
+    source.kind === 'volley'
+    ? source.from
+    : undefined;
+}
 
 /** A unit or building being dragged: from the map or from the treasury panel. */
 export interface HandDrag {
@@ -112,7 +135,18 @@ export function placeCommand(source: HandSource, tile: number): Command {
       return { type: 'buyUnit', line: source.line, center: source.center, tile };
     case 'build':
       return { type: 'build', building: source.building, center: source.center, tile };
+    case 'edge':
+      return { type: 'buildEdge', structure: source.structure, worker: source.from, to: tile };
+    case 'breach':
+      return { type: 'breachEdge', from: source.from, to: tile };
+    case 'volley':
+      return { type: 'archerVolley', from: source.from, target: tile };
   }
+}
+
+/** The tile to select after using a source on `tile`: the target, or the acting unit's. */
+function afterUse(source: HandSource, tile: number): number {
+  return source.kind === 'unit' ? tile : (actingTile(source) ?? tile);
 }
 
 /** True if two sources pick up the same thing (a second click on a button drops it). */
@@ -125,6 +159,12 @@ export function sameSource(a: HandSource | null, b: HandSource): boolean {
       return a.kind === 'recruit' && a.line === b.line && a.center === b.center;
     case 'build':
       return a.kind === 'build' && a.building === b.building && a.center === b.center;
+    case 'edge':
+      return a.kind === 'edge' && a.structure === b.structure && a.from === b.from;
+    case 'breach':
+      return a.kind === 'breach' && a.from === b.from;
+    case 'volley':
+      return a.kind === 'volley' && a.from === b.from;
   }
 }
 
@@ -216,13 +256,14 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
         return;
       }
       if (armed) {
-        if (armed.kind === 'unit' && armed.from === tile) {
-          set({ armed: null });
+        // A tap on the acting unit itself puts it down.
+        if (actingTile(armed) === tile) {
+          set({ armed: null, selectedTile: tile });
           return;
         }
         const command = placeCommand(armed, tile);
         if (validate(game, command).ok || !isMovableUnit(game, tile)) {
-          if (dispatch(command)) set({ selectedTile: tile });
+          if (dispatch(command)) set({ selectedTile: afterUse(armed, tile) });
           else set({ armed: null });
           return;
         }
@@ -253,8 +294,10 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
       if (!drag) return;
       set({ drag: null });
       if (tile === null) return;
-      if (drag.source.kind === 'unit' && drag.source.from === tile) return;
-      if (dispatch(placeCommand(drag.source, tile))) set({ selectedTile: tile });
+      if (actingTile(drag.source) === tile) return;
+      if (dispatch(placeCommand(drag.source, tile))) {
+        set({ selectedTile: afterUse(drag.source, tile) });
+      }
     },
 
     setHotseat(hotseat) {

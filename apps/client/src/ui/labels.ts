@@ -1,13 +1,15 @@
-import { RESOURCE_KINDS } from '@hexarchy/engine';
+import { edgeTiles, RESOURCE_KINDS } from '@hexarchy/engine';
 import type {
   Age,
   BuildingKind,
   CenterKind,
   CommandError,
+  EdgeKey,
   EdgeKind,
   GameEvent,
   PlayerId,
   Resources,
+  StructureKind,
   Terrain,
   Unit,
   UnitLine,
@@ -77,9 +79,9 @@ export const BUILDING_HINTS: Readonly<Record<BuildingKind, string>> = {
   quarry: 'Tepeye kurulur. Komşu her kendi tepen ve her dağ için +1 malzeme.',
   goldMine: 'Damarlı tepeye kurulur. +3 altın, bakımı yok.',
   barracks: 'Ovaya kurulur. Bölgede piyade alımını açar.',
-  archeryRange: 'Ovaya kurulur. Okçu hattını açar (M5).',
-  stable: 'Ovaya kurulur. Süvari hattını açar (M5).',
-  workshop: 'Ovaya kurulur. Kuşatma hattını açar (M5).',
+  archeryRange: 'Ovaya kurulur. Bölgede okçu alımını açar.',
+  stable: 'Ovaya kurulur. Bölgede süvari alımını açar.',
+  workshop: 'Ovaya kurulur. Bölgede koçbaşı alımını açar.',
   tower: 'Ova ya da tepeye kurulur. Kendi karosunu ve komşularını 2 güçle korur.',
 };
 
@@ -92,13 +94,43 @@ export const AGE_LABELS: Readonly<Record<Age, string>> = {
 
 export const LINE_LABELS: Readonly<Record<UnitLine, string>> = {
   infantry: 'Piyade',
+  archer: 'Okçu',
+  cavalry: 'Süvari',
+  siege: 'Koçbaşı',
   worker: 'İşçi',
+};
+
+/** What each line is good at (GDD 6.1, 7.2), for tooltips. */
+export const LINE_HINTS: Readonly<Record<UnitLine, string>> = {
+  infantry: 'Süvariye saldırırken +1.',
+  archer: '2 karo uzağı, kenarların ardını da korur. Baskı atışı: düşman birime −1 güç.',
+  cavalry: 'Dışarı 2 adım gider. Okçuya ve kuşatmaya saldırırken +1.',
+  siege: 'Kenar yapılarını kırar (çit 1, sur/kapı 2 vuruş). Birimli karoyu alamaz.',
+  worker: 'Savaşamaz. Karosunun kenarlarına çit, sur, kapı ve köprü kurar.',
 };
 
 /** Unit names by line and level (GDD 6.1). */
 const UNIT_NAMES: Readonly<Record<UnitLine, readonly string[]>> = {
   infantry: ['', 'Milis', 'Mızrakçı', 'Pikeman', 'Muhafız'],
+  archer: ['', 'Okçu', 'Arbaletçi', 'Uzun yaycı'],
+  cavalry: ['', 'Keşif atlısı', 'Hafif süvari', 'Şövalye', 'Paladin'],
+  siege: ['', 'Koçbaşı'],
   worker: ['İşçi'],
+};
+
+export const STRUCTURE_LABELS: Readonly<Record<StructureKind, string>> = {
+  fence: 'Çit',
+  wall: 'Taş sur',
+  gate: 'Kapı',
+  bridge: 'Köprü',
+};
+
+/** What an edge structure does (GDD 3.2, 5.3), for tooltips. */
+export const STRUCTURE_HINTS: Readonly<Record<StructureKind, string>> = {
+  fence: 'Hareketi keser (herkes), kasayı kesmez. Koçbaşı ya da Sv3+ kırar.',
+  wall: 'Kendi çitinin yerine. Hareketi keser; yalnızca kuşatma kırar (2 vuruş).',
+  gate: 'Kendi surunun yerine. Sahibine açık, düşmana kapalı sur.',
+  bridge: 'Derenin üstüne. Hareketi ve kasayı bağlar.',
 };
 
 export function unitName(unit: Pick<Unit, 'line' | 'level'>): string {
@@ -122,19 +154,35 @@ export const COMMAND_ERROR_LABELS: Readonly<Record<CommandError, string>> = {
   notYourRegion: 'Bu kasa senin değil.',
   notEnoughGold: 'Kasada yeterli altın yok.',
   notEnoughMaterials: 'Kasada yeterli malzeme yok.',
-  needsBuilding: 'Bu bölgede çalışan bir kışla gerekir.',
-  ageLocked: 'Bu bina daha sonraki bir çağda açılır.',
+  needsBuilding: 'Bu bölgede bu hattın çalışan binası gerekir.',
+  ageLocked: 'Daha sonraki bir çağda açılır.',
   outsideRegion: 'Bina yalnızca kasanın bölgesine kurulur.',
   tileOccupied: 'Bu karoda zaten bir bina ya da merkez var.',
   wrongTerrain: 'Bu bina bu araziye kurulamaz.',
   needsVein: 'Altın madeni damarlı bir tepeye kurulur.',
   needsForest: 'Kereste ocağının yanında orman olmalı.',
   unreachable: 'Oraya ulaşamaz.',
-  edgeBlocked: 'Dere geçilemez: köprü ya da geçit gerekir.',
+  edgeBlocked: 'Kenar geçilemez (dere, çit ya da sur).',
   cannotCapture: 'İşçiler toprak alamaz.',
   protected: 'Karo korumalı: daha güçlü bir birim gerekir.',
   cannotMerge: 'Bu birimler birleşemez.',
   levelCap: 'Seviye kilidi: bu çağda daha yükseğe birleşemez.',
+  lineMaxLevel: 'Bu hat daha yükseğe birleşemez.',
+  unknownStructure: 'Böyle bir yapı yok.',
+  cannotBuildEdges: 'Kenar yapılarını yalnızca işçi kurar.',
+  notAdjacent: 'Birimin karosuna komşu bir kenar seç.',
+  needsRiver: 'Köprü yalnızca dere üstüne kurulur.',
+  riverEdge: 'Dere üstüne yalnızca köprü kurulur.',
+  edgeOccupied: 'Bu kenarda zaten bir yapı var.',
+  needsWall: 'Kapı yalnızca kendi surunun yerine kurulur.',
+  cannotBreach: 'Bu birim bu yapıyı kıramaz.',
+  noStructure: 'Bu kenarda yapı yok.',
+  ownStructure: 'Kendi yapını kıramazsın.',
+  cannotVolley: 'Yalnızca okçular baskı atışı yapar.',
+  outOfRange: 'Menzil dışında (en fazla 2 karo).',
+  notEnemy: 'Hedef düşman birimi olmalı.',
+  alreadySuppressed: 'Bu birim zaten baskı altında.',
+  noEffect: 'Bu birimin gücü zaten 0.',
 };
 
 /** Errors the player causes by just tapping around; not worth a notice. */
@@ -150,6 +198,12 @@ function centerText(center: number | null): string {
 
 function tilesText(tiles: readonly number[]): string {
   return tiles.map((t) => `#${t}`).join(' ');
+}
+
+/** The side between two tiles, e.g. "#184–#210". */
+function edgeText(edge: EdgeKey): string {
+  const [a, b] = edgeTiles(edge);
+  return `#${a}–#${b}`;
 }
 
 function ownerName(player: PlayerId | null): string {
@@ -210,5 +264,20 @@ export function describeEvent(event: GameEvent): string | null {
       return `${playerName(event.player)}: −${event.amount} ${RESOURCE_LABELS[event.resource].toLowerCase()} bakım ← #${event.center}`;
     case 'ageChanged':
       return `${playerName(event.player)}: ${AGE_LABELS[event.age]}`;
+    case 'edgeBuilt': {
+      const what = STRUCTURE_LABELS[event.structure];
+      const over = event.replaces
+        ? ` (${STRUCTURE_LABELS[event.replaces].toLowerCase()} yerine)`
+        : '';
+      return `${playerName(event.player)}: ${what} kuruldu ${edgeText(event.edge)}${over} (−${event.cost} malzeme)`;
+    }
+    case 'edgeDamaged':
+      return `${playerName(event.player)}: ${STRUCTURE_LABELS[event.structure]} ${edgeText(event.edge)} hasar ${event.damage}/${event.hits}`;
+    case 'edgeDestroyed':
+      return `${playerName(event.player)}: ${playerName(event.owner)} ${STRUCTURE_LABELS[event.structure].toLowerCase()} ${edgeText(event.edge)} yıkıldı`;
+    case 'edgeCaptured':
+      return `${edgeText(event.edge)}: ${STRUCTURE_LABELS[event.structure]} ${playerName(event.from)} → ${playerName(event.to)}`;
+    case 'volley':
+      return `${playerName(event.player)}: baskı atışı #${event.from} → ${unitName(event.unit)} #${event.target} (−1 güç)`;
   }
 }

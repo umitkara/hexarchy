@@ -1,3 +1,4 @@
+import type { EdgeKey } from '../hex/edge';
 import type { RngState } from '../rng';
 import type { GameMap } from './map';
 
@@ -65,10 +66,13 @@ export interface Center {
   readonly treasury: Resources;
 }
 
-/** Unit lines (GDD 6.1). M3: infantry and the worker; the other lines follow in M5. */
-export type UnitLine = 'infantry' | 'worker';
+/**
+ * Unit lines (GDD 6.1): infantry, archers, cavalry, siege (v0.1: the battering ram only)
+ * and the worker. Ships follow in v0.2.
+ */
+export type UnitLine = 'infantry' | 'archer' | 'cavalry' | 'siege' | 'worker';
 
-export const UNIT_LINES: readonly UnitLine[] = ['infantry', 'worker'];
+export const UNIT_LINES: readonly UnitLine[] = ['infantry', 'archer', 'cavalry', 'siege', 'worker'];
 
 /**
  * A unit stands on a tile; its owner is the owner of that tile. At most one unit per tile
@@ -88,6 +92,11 @@ export interface Unit {
    * start. Fights at −1 strength; if the region is short again next time, it may rebel.
    */
   readonly hungry: boolean;
+  /**
+   * Under an archer volley (GDD 7.3): −1 strength until the end of the current turn. Only
+   * units of players other than the one on turn can be suppressed.
+   */
+  readonly suppressed: boolean;
 }
 
 /** Buildings (GDD 5.1, 5.2); centers are separate (see Center). */
@@ -128,6 +137,22 @@ export interface Building {
   readonly idle: boolean;
 }
 
+/** Edge structures (GDD 3.2, 5.3), built by workers on hex edges. */
+export type StructureKind = 'fence' | 'wall' | 'gate' | 'bridge';
+
+export const STRUCTURE_KINDS: readonly StructureKind[] = ['fence', 'wall', 'gate', 'bridge'];
+
+/**
+ * A structure on the edge between two tiles. It belongs to its builder until both sides of
+ * the edge pass to one other player, who then takes it over (GDD 5.3, decision 30).
+ */
+export interface EdgeStructure {
+  readonly kind: StructureKind;
+  readonly owner: PlayerId;
+  /** Siege hits taken so far; it falls at STRUCTURES[kind].hits (GDD 7.4). */
+  readonly damage: number;
+}
+
 export interface GameState {
   readonly map: GameMap;
   /** 1-based round; a round is one turn of every player. */
@@ -146,6 +171,12 @@ export interface GameState {
   readonly units: Readonly<Partial<Record<number, Unit>>>;
   /** Buildings by tile index. Invariant: buildings only stand on owned tiles. */
   readonly buildings: Readonly<Partial<Record<number, Building>>>;
+  /**
+   * Edge structures by edge key (the map's natural edges — rivers, fords — stay in
+   * `map.edges`). Invariants: both tiles of the edge are ownable land; a bridge stands on a
+   * river, the others never do; if both tiles have one owner, the structure is theirs.
+   */
+  readonly edgeStructures: Readonly<Partial<Record<EdgeKey, EdgeStructure>>>;
   /** State of the seeded RNG for in-game randomness. */
   readonly rng: RngState;
 }
@@ -162,6 +193,11 @@ export function unitTiles(state: Pick<GameState, 'units'>): number[] {
   return Object.keys(state.units)
     .map(Number)
     .sort((a, b) => a - b);
+}
+
+/** Edges that hold a structure, in key order. */
+export function structureEdges(state: Pick<GameState, 'edgeStructures'>): EdgeKey[] {
+  return (Object.keys(state.edgeStructures) as EdgeKey[]).sort();
 }
 
 /** Tiles that hold a building, ascending. */

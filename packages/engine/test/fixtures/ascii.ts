@@ -5,11 +5,13 @@ import type {
   Building,
   BuildingKind,
   Center,
+  EdgeStructure,
   GameState,
   Player,
   PlayerId,
   Resources,
   Unit,
+  UnitLine,
 } from '../../src/state/game';
 import {
   mapGrid,
@@ -40,11 +42,12 @@ import {
  *   building (needs an owner; never idle)  `#` farm  `l` lumber camp  `q` quarry
  *            `$` gold mine  `k` barracks  `r` archery range  `s` stable  `x` workshop
  *            `t` tower
- *   unit     `1`-`4` infantry of that level, `w` worker (needs an owner; never exhausted
- *            or hungry)
+ *   unit     (needs an owner; never exhausted, hungry or suppressed)
+ *            `1`-`4` infantry of that level, `a`/`a2`/`a3` archer (level 1 unless given),
+ *            `c`/`c2`-`c4` cavalry, `m` ram, `w` worker
  * Plains may omit the terrain character when owned (`A`, `A2`, `A#`); a neutral plains
  * tile is `.`. Longer combinations (`hA*2`) do not fit a cell: use `withUnit` and
- * `withBuilding`.
+ * `withBuilding`. Edge structures are not drawn: add them with `withStructure`.
  *
  * Edges: the separator after a token marks the east edge of that tile: `|` river,
  * `=` ford, space none. The edges between two tile rows (NE/NW/SE/SW sides) are marked
@@ -90,7 +93,7 @@ const BUILDING_TO_CHAR = Object.fromEntries(
 ) as Readonly<Record<BuildingKind, string>>;
 
 const OWNER_CHARS = 'ABCD';
-const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?([#lq$krsxt])?([1-4w])?$/;
+const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?([#lq$krsxt])?([1-4]|[ac][1-4]?|m|w)?$/;
 const EDGE_LINE = /^[\s/\\|=]*$/;
 const CELL = 4;
 
@@ -190,10 +193,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       }
       if (unitChar !== undefined) {
         if (owner === null) throw new Error(`Unit without owner at (${col}, ${row})`);
-        units[index(col, row)] =
-          unitChar === 'w'
-            ? { line: 'worker', level: 0, exhausted: false, hungry: false }
-            : { line: 'infantry', level: Number(unitChar), exhausted: false, hungry: false };
+        units[index(col, row)] = parseUnit(unitChar);
       }
       const kind = edgeKind(separator);
       if (kind && col + 1 < width) edges[edgeKey(index(col, row), index(col + 1, row))] = { kind };
@@ -232,6 +232,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       centers,
       units,
       buildings,
+      edgeStructures: {},
       rng: createRngState(0),
     },
     tile: (col, row) => {
@@ -241,6 +242,34 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       return index(col, row);
     },
   };
+}
+
+const UNIT_CHARS: Readonly<Record<string, UnitLine>> = {
+  a: 'archer',
+  c: 'cavalry',
+  m: 'siege',
+  w: 'worker',
+};
+
+const UNIT_TO_CHAR: Readonly<Record<UnitLine, string>> = {
+  infantry: '',
+  archer: 'a',
+  cavalry: 'c',
+  siege: 'm',
+  worker: 'w',
+};
+
+function parseUnit(chars: string): Unit {
+  const line = UNIT_CHARS[chars[0] ?? ''] ?? 'infantry';
+  const digits = line === 'infantry' ? chars : chars.slice(1);
+  const level = line === 'worker' ? 0 : digits === '' ? 1 : Number(digits);
+  return { line, level, exhausted: false, hungry: false, suppressed: false };
+}
+
+function unitToken(unit: Unit): string {
+  if (unit.line === 'worker' || unit.line === 'siege') return UNIT_TO_CHAR[unit.line];
+  if (unit.line === 'infantry') return String(unit.level);
+  return UNIT_TO_CHAR[unit.line] + (unit.level === 1 ? '' : String(unit.level));
 }
 
 /**
@@ -287,7 +316,7 @@ export function renderFixture(state: GameState): string {
         (owner === null ? '' : (OWNER_CHARS[owner] ?? '?')) +
         (center ? (center.kind === 'capital' ? '*' : '+') : '') +
         (building ? BUILDING_TO_CHAR[building.kind] : '') +
-        (unit ? (unit.line === 'worker' ? 'w' : String(unit.level)) : '');
+        (unit ? unitToken(unit) : '');
       if (token.length > 3) throw new Error(`Tile ${i} does not fit a cell: "${token}"`);
       const kind = col + 1 < width ? edge(i, i + 1) : undefined;
       line += token.padEnd(3) + (kind === 'river' ? '|' : kind === 'ford' ? '=' : ' ');
@@ -343,4 +372,19 @@ export function withUnit(state: GameState, tile: number, unit: Unit | undefined)
   // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
   else delete units[tile];
   return { ...state, units };
+}
+
+/** A copy of the state with a structure put on (or, with `undefined`, removed from) the edge a–b. */
+export function withStructure(
+  state: GameState,
+  a: number,
+  b: number,
+  structure: (Partial<EdgeStructure> & Pick<EdgeStructure, 'kind' | 'owner'>) | undefined,
+): GameState {
+  const edgeStructures = { ...state.edgeStructures };
+  const key = edgeKey(a, b);
+  if (structure) edgeStructures[key] = { damage: 0, ...structure };
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  else delete edgeStructures[key];
+  return { ...state, edgeStructures };
 }

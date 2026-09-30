@@ -244,6 +244,7 @@ Okçu, 2 karo içindeki düşman birimine **kenar engellerinden bağımsız** at
 ### 7.4 Kenar üzerinden saldırı
 - Köprüsüz dere / düşman suru / çit üzerinden **saldırı yapılamaz** (geçit ve kapı hariç kurallar geçerli).
 - **Kuşatma:** Koçbaşı komşu çiti 1 turda, taş suru/kapıyı 2 turda kırar. Mancınık 2 menzilden kenar/bina kırar. `[TASLAK]`
+- **Kırma eylemi (v0.1):** Birim, kendi karosunun kenarındaki düşman yapısına vurur ve yerinde kalır (o tur işi biter). Koçbaşı her vuruşta 1 hasar verir (çit ve köprü 1, sur ve kapı 2 vuruşta yıkılır); hasar kalıcıdır, başka koçbaşı devam edebilir, onarım yok. Sv3+ birim komşu düşman çitini tek vuruşta yıkar (karar 51).
 
 ### 7.5 Arayüz
 Hover/sürükleme sırasında hedef karoda **kalkan ikonları**: kim, hangi güçle koruyor. Oyuncu her zaman sonucu görür.
@@ -427,3 +428,17 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 | 45 | Askeri bina yeri | Ova; kule tepe veya ova | Her kara karosu |
 | 46 | Taş ocağı komşuları | Dağ her zaman, tepe sahipliyse | İkisi de sahipli olmalı |
 | 47 | Orman yayılması zamanı | Her oyuncunun tur başında kendi toprağına | Tur sonunda, tüm haritaya |
+| 48 | Süvari 2 adım | Tek hamle, dışarı 2 adım; ara karo birimsiz ve süvarinin alabileceği bir karo olmalı, el değiştirmez | İki ayrı adım, ara karoyu da alır |
+| 49 | Karşılık bonusu | Yalnızca saldırana | Savunmaya da |
+| 50 | Baskı atışı | Birikmez (en fazla −1, açlık cezası ayrı); menzil = hex mesafesi ≤ 2; hedef gücü > 0 olan düşman birimi; tur sonuna dek | Birikir |
+| 51 | Sv3+ ve çit | Ayrı "kır" eylemi, birim yerinde kalır | Çitin ardındaki karoya saldırıyla kırar |
+| 52 | Köprü yıkımı | Koçbaşı 1 turda (Sv3+ kıramaz) | Yıkılamaz |
+| 53 | Kuşatma hasarı | Kalıcı; koçbaşı başına tur başına 1 vuruş; onarım yok | Tur sonunda sıfırlanır |
+| 54 | Kendi yapısını kaldırma | v0.1'de yok | Kaldır/yık eylemi |
+| 55 | Çit/sur yeri | Dere dışı her kara kenarı (geçit dahil, komşu karo herkesinki olabilir); köprü yalnızca dereye | Sadece sınır kenarları |
+| 56 | Yükseltme | Kendi çitine sur, kendi suruna kapı; tam fiyat, hasar kalır | Ayrı inşa |
+| 57 | Kenar inşası ödemesi | İşçinin bölgesinin kasasından; işçi yorgun olmamalı, inşadan sonra yorulur | Başkent kasası, işçi serbest |
+| 58 | Sv1 asker fiyatı | Tüm hatlarda 10 altın (koçbaşı dahil) | Hat başına farklı |
+| 59 | Hat tavanları (v0.1) | Okçu en fazla Sv3; koçbaşı birleşmez (Sv1) | Hepsi Sv4 |
+| 60 | Süvari/koçbaşı çağı | Feodal (ahır/atölye ile aynı) | Karanlık |
+| 61 | Koçbaşı ve karolar | Birimli karoyu alamaz (işçi dahil); merkez/kuleye tam güç; tarafsız karoyu alabilir | Hiç karo alamaz |

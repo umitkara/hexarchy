@@ -2,6 +2,7 @@ import {
   axialToPixel,
   cornerPosition,
   DIRECTIONS,
+  edgeKey,
   edgeTiles,
   hexPolygon,
   isWater,
@@ -190,7 +191,7 @@ function drawVein(g: Graphics, c: Point): void {
 }
 
 /** The tile side of an edge as a segment between its two corners. */
-function edgeSegment(grid: HexGrid, key: EdgeKey): readonly [Point, Point] | undefined {
+export function edgeSegment(grid: HexGrid, key: EdgeKey): readonly [Point, Point] | undefined {
   const [a, b] = edgeTiles(key);
   const side = grid.directionTo(a, b);
   if (side === undefined) return undefined;
@@ -235,11 +236,30 @@ export function drawEdges(g: Graphics, map: GameMap): void {
   }
 }
 
-export function drawHover(g: Graphics, map: GameMap, tile: number | null): void {
+/**
+ * Hover outline of a tile; with `edgeFrom` (an edge action in hand) and a neighbor of it
+ * hovered, the shared side instead: that is the edge the action would use.
+ */
+export function drawHover(
+  g: Graphics,
+  map: GameMap,
+  tile: number | null,
+  edgeFrom: number | null = null,
+): void {
   g.clear();
   if (tile === null) return;
   const grid = mapGrid(map);
   if (!grid.has(tile)) return;
+  if (edgeFrom !== null && grid.areAdjacent(edgeFrom, tile)) {
+    const segment = edgeSegment(grid, edgeKey(edgeFrom, tile));
+    if (segment) {
+      const [a, b] = segment;
+      g.moveTo(a.x, a.y)
+        .lineTo(b.x, b.y)
+        .stroke({ width: TILE_SIZE * 0.2, color: PALETTE.hover, alpha: 0.9, cap: 'round' });
+      return;
+    }
+  }
   const center = axialToPixel(grid.coord(tile), TILE_SIZE);
   g.poly(hexPolygon(center, TILE_SIZE * 0.94)).stroke({
     width: 3,

@@ -1,4 +1,11 @@
-import type { Age, BuildingKind, CenterKind, Resources, UnitLine } from './state/game';
+import type {
+  Age,
+  BuildingKind,
+  CenterKind,
+  Resources,
+  StructureKind,
+  UnitLine,
+} from './state/game';
 import type { Terrain } from './state/map';
 
 /**
@@ -111,12 +118,14 @@ export const ECONOMY = {
   firstIncomeRound: 2,
 } as const;
 
-/** Per-line unit data (GDD 4.4, 6.1). */
+/** Per-line unit data (GDD 4.4, 6.1, 7). */
 export interface UnitLineStats {
   /** Gold price of a bought unit. */
   readonly cost: number;
   /** Level of a bought unit; higher levels only come from merging (GDD 4.4). */
   readonly buyLevel: number;
+  /** Highest level of the line (archers stop at 3; the ram has no merged form in v0.1). */
+  readonly maxLevel: number;
   /** Turn-start upkeep by level (index = level). */
   readonly upkeep: readonly number[];
   /** Can capture tiles and attack. Support units (strength 0) cannot. */
@@ -125,23 +134,179 @@ export interface UnitLineStats {
   readonly merges: boolean;
   /** Building the paying region needs (active) to buy this line (GDD 4.2, 5.2). */
   readonly requires: BuildingKind | null;
+  /** Earliest age of its owner for buying it (GDD 9.1). */
+  readonly age: Age;
+  /** Steps it may take beyond its free-movement area (GDD 6.4: cavalry 2). */
+  readonly reach: number;
+  /** Protection radius around its tile (1 = the tile and its neighbors; archers 2). */
+  readonly protectionRadius: number;
+  /** Its protection crosses rivers, fences and walls (archers, GDD 7.1). */
+  readonly rangedProtection: boolean;
+  /** Can fire a volley (GDD 7.3). */
+  readonly volley: boolean;
+  /** Siege: 0 strength against units, batters edge structures (GDD 7.2, 7.4). */
+  readonly siege: boolean;
+  /** Builds edge structures (GDD 5.3). */
+  readonly buildsEdges: boolean;
 }
 
+const SOLDIER_UPKEEP = [0, 1, 3, 9, 27] as const;
+
 /**
- * Unit lines of M3: infantry (Militia, Spearman, Pikeman, Guard) and the worker (level 0).
- * Archers, cavalry and siege join in M5. Combat strength = level (GDD 7.1).
+ * Unit lines: infantry (Militia, Spearman, Pikeman, Guard), archers (Archer, Crossbowman,
+ * Longbowman), cavalry (Scout, Light cavalry, Knight, Paladin), siege (the battering ram
+ * in v0.1) and the worker (level 0). Every level-1 soldier costs the same (GDD 4.4).
+ * Combat strength = level (GDD 7.1).
  */
 export const UNITS = {
   infantry: {
     cost: 10,
     buyLevel: 1,
-    upkeep: [0, 1, 3, 9, 27],
+    maxLevel: 4,
+    upkeep: SOLDIER_UPKEEP,
     fights: true,
     merges: true,
     requires: 'barracks',
+    age: 'dark',
+    reach: 1,
+    protectionRadius: 1,
+    rangedProtection: false,
+    volley: false,
+    siege: false,
+    buildsEdges: false,
   },
-  worker: { cost: 8, buyLevel: 0, upkeep: [1], fights: false, merges: false, requires: null },
+  archer: {
+    cost: 10,
+    buyLevel: 1,
+    maxLevel: 3,
+    upkeep: SOLDIER_UPKEEP,
+    fights: true,
+    merges: true,
+    requires: 'archeryRange',
+    age: 'dark',
+    reach: 1,
+    protectionRadius: 2,
+    rangedProtection: true,
+    volley: true,
+    siege: false,
+    buildsEdges: false,
+  },
+  cavalry: {
+    cost: 10,
+    buyLevel: 1,
+    maxLevel: 4,
+    upkeep: SOLDIER_UPKEEP,
+    fights: true,
+    merges: true,
+    requires: 'stable',
+    age: 'feudal',
+    reach: 2,
+    protectionRadius: 1,
+    rangedProtection: false,
+    volley: false,
+    siege: false,
+    buildsEdges: false,
+  },
+  siege: {
+    cost: 10,
+    buyLevel: 1,
+    maxLevel: 1,
+    upkeep: SOLDIER_UPKEEP,
+    fights: true,
+    merges: false,
+    requires: 'workshop',
+    age: 'feudal',
+    reach: 1,
+    protectionRadius: 1,
+    rangedProtection: false,
+    volley: false,
+    siege: true,
+    buildsEdges: false,
+  },
+  worker: {
+    cost: 8,
+    buyLevel: 0,
+    maxLevel: 0,
+    upkeep: [1],
+    fights: false,
+    merges: false,
+    requires: null,
+    age: 'dark',
+    reach: 1,
+    protectionRadius: 0,
+    rangedProtection: false,
+    volley: false,
+    siege: false,
+    buildsEdges: true,
+  },
 } as const satisfies Readonly<Record<UnitLine, UnitLineStats>>;
+
+/** Archer volley (GDD 7.3) [DRAFT]: range in tiles, strength lost until the turn ends. */
+export const VOLLEY = {
+  range: 2,
+  penalty: 1,
+} as const;
+
+export interface StructureStats {
+  /** Materials paid from the builder's region treasury (GDD 5.3). */
+  readonly cost: number;
+  /** Earliest age of its builder (GDD 9.1). */
+  readonly age: Age;
+  /** Where it goes: on a river edge (bridge) or on any other land edge. */
+  readonly onRiver: boolean;
+  /** Replaces this own structure when built on its edge (upgrade at full price). */
+  readonly upgrades: StructureKind | null;
+  /** Only as an upgrade of `upgrades` (the gate needs a wall). */
+  readonly upgradeOnly: boolean;
+  /** Siege hits that bring it down (GDD 7.4: fence 1 turn, wall and gate 2). */
+  readonly hits: number;
+  /** Non-siege units of this level or more break it with one blow (fence: Sv3+), or null. */
+  readonly breakLevel: number | null;
+}
+
+/**
+ * Edge structures (GDD 3.2, 5.3) [DRAFT costs]. Built by a worker next to the edge.
+ * Movement: fences and walls cut it for everyone, gates only for others, bridges connect a
+ * river. Treasuries: only bridges change anything (they link across a river).
+ */
+export const STRUCTURES = {
+  fence: {
+    cost: 2,
+    age: 'dark',
+    onRiver: false,
+    upgrades: null,
+    upgradeOnly: false,
+    hits: 1,
+    breakLevel: 3,
+  },
+  wall: {
+    cost: 5,
+    age: 'feudal',
+    onRiver: false,
+    upgrades: 'fence',
+    upgradeOnly: false,
+    hits: 2,
+    breakLevel: null,
+  },
+  gate: {
+    cost: 4,
+    age: 'feudal',
+    onRiver: false,
+    upgrades: 'wall',
+    upgradeOnly: true,
+    hits: 2,
+    breakLevel: null,
+  },
+  bridge: {
+    cost: 6,
+    age: 'feudal',
+    onRiver: true,
+    upgrades: null,
+    upgradeOnly: false,
+    hits: 1,
+    breakLevel: null,
+  },
+} as const satisfies Readonly<Record<StructureKind, StructureStats>>;
 
 /** Unit upkeep (GDD 4.4): paid in food at turn start. */
 export const UPKEEP = {
@@ -187,8 +352,7 @@ export interface BuildingStats {
 
 /**
  * Buildings (GDD 5.1, 5.2) [DRAFT costs]. Production buildings yield by neighborhood (GDD
- * 4.3); military ones unlock unit lines (see UNITS.requires; archers, cavalry and siege
- * arrive in M5) or protect (tower).
+ * 4.3); military ones unlock unit lines (see UNITS.requires) or protect (tower).
  */
 export const BUILDINGS = {
   farm: {
@@ -331,8 +495,12 @@ export const CENTER_PROTECTION = {
 } as const satisfies Readonly<Record<CenterKind, number>>;
 
 /**
- * Counter bonuses (GDD 7.2): attacker line → defender line → extra strength. Only lines that
- * exist are listed; M5 adds infantry → cavalry +1, cavalry → archer/siege +1.
+ * Counter bonuses (GDD 7.2) [DRAFT]: attacker line → defender line → extra strength. Only
+ * the attacker gets them (GDD 7.1). Siege is special instead (UNITS.siege): full strength
+ * against centers and towers, 0 against units.
  */
 export const COUNTER_BONUS: Readonly<Partial<Record<UnitLine, Partial<Record<UnitLine, number>>>>> =
-  {};
+  {
+    infantry: { cavalry: 1 },
+    cavalry: { archer: 1, siege: 1 },
+  };

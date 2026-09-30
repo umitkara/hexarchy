@@ -1,12 +1,15 @@
 import { current, type Draft } from 'immer';
+import { edgeKey, edgeTiles } from '../hex/edge';
 import {
   addResources,
   emptyResources,
+  structureEdges,
   type Center,
   type GameState,
   type PlayerId,
   type Resources,
 } from '../state/game';
+import { mapGrid } from '../state/map';
 import type { GameEvent } from './events';
 import { computeRegions, innermostTile, regionAt } from './regions';
 import { removeUnit } from './upkeep';
@@ -25,6 +28,9 @@ import { removeUnit } from './upkeep';
  *   its region is then handled like any piece without a center.
  * - A unit on a tile that changes owner dies (an attacker then moves in).
  * - A building changes hands with its tile; it is lost if the tile becomes neutral.
+ * - An edge structure passes to a player who comes to own both of its sides (GDD 5.3).
+ * - Bridges change the treasury graph too: building or losing one also restores the center
+ *   invariants (see reconcileCenters).
  */
 
 export interface OwnerChange {
@@ -75,21 +81,66 @@ export function changeOwners(
     draft.owners[tile] = owner;
     events.push({ type: 'tileOwnerChanged', tile, from, to: owner });
   }
-  reconcileCenters(draft, previousOwners, events);
+  takeOverStructures(
+    draft,
+    changes.map((c) => c.tile),
+    events,
+  );
+  reconcileCenters(
+    draft,
+    { owners: previousOwners, edgeStructures: current(draft.edgeStructures) },
+    events,
+  );
 }
 
 /**
- * Restores the center invariants after ownership changed from `previousOwners` to the
- * draft's current owners: merges, automatic local centers, isolated local centers.
+ * Edge structures next to `tiles` pass to the player who now owns both of their sides
+ * (GDD 5.3, decision 30). Taking one side only leaves the structure to its owner.
+ */
+function takeOverStructures(
+  draft: Draft<GameState>,
+  tiles: readonly number[],
+  events: GameEvent[],
+): void {
+  const grid = mapGrid(draft.map);
+  const edges = new Set(tiles.flatMap((t) => grid.neighbors(t).map((n) => edgeKey(t, n))));
+  for (const edge of structureEdges(draft)) {
+    if (!edges.has(edge)) continue;
+    const structure = draft.edgeStructures[edge];
+    const [a, b] = edgeTiles(edge);
+    const owner = draft.owners[a] ?? null;
+    if (!structure || owner === null || draft.owners[b] !== owner || structure.owner === owner) {
+      continue;
+    }
+    events.push({
+      type: 'edgeCaptured',
+      edge,
+      structure: structure.kind,
+      from: structure.owner,
+      to: owner,
+    });
+    structure.owner = owner;
+  }
+}
+
+/** The ownership and edges the center invariants last held for. */
+export type RegionSnapshot = Pick<GameState, 'owners' | 'edgeStructures'>;
+
+/**
+ * Restores the center invariants after ownership or bridges changed from `previous` to the
+ * draft's current state: merges, automatic local centers, isolated local centers.
  */
 export function reconcileCenters(
   draft: Draft<GameState>,
-  previousOwners: readonly (PlayerId | null)[],
+  previous: RegionSnapshot,
   events: GameEvent[],
 ): void {
   const state: GameState = current(draft);
-  const before = computeRegions(state.map, previousOwners);
-  const after = computeRegions(state.map, state.owners);
+  const before = computeRegions(
+    { map: state.map, edgeStructures: previous.edgeStructures },
+    previous.owners,
+  );
+  const after = computeRegions(state, state.owners);
   const sizeBefore = (tile: number) => regionAt(before, tile)?.tiles.length ?? 0;
   const centerAt = (tile: number): Center => {
     const center = state.centers[tile];
@@ -139,7 +190,7 @@ export function reconcileCenters(
         });
       }
     } else if (region.tiles.length >= 2) {
-      const tile = innermostTile(state.map, after, region);
+      const tile = innermostTile(state, after, region);
       draft.centers[tile] = { kind: 'local', treasury: emptyResources() };
       events.push({ type: 'centerFounded', tile, owner: region.owner });
     }

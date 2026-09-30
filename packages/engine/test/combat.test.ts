@@ -75,7 +75,7 @@ describe('attack (GDD 7.1)', () => {
         type: 'unitKilled',
         tile: f.tile(2, 0),
         owner: 1,
-        unit: { line: 'infantry', level: 1, exhausted: false, hungry: false },
+        unit: { line: 'infantry', level: 1, exhausted: false, hungry: false, suppressed: false },
         reason: 'captured',
       },
     ]);
@@ -91,7 +91,11 @@ describe('attack (GDD 7.1)', () => {
   it('respects the center: level 1 cannot take a tile next to a center', () => {
     const f = parseFixture('A*  A1  B   B+  B');
     expect(
-      attackBlockers(f.state, { line: 'infantry', level: 1, exhausted: false, hungry: false }, 2),
+      attackBlockers(
+        f.state,
+        { line: 'infantry', level: 1, exhausted: false, hungry: false, suppressed: false },
+        2,
+      ),
     ).toEqual([{ kind: 'center', tile: f.tile(3, 0), owner: 1, strength: 1, center: 'local' }]);
     expect(refusal(f.state, move(f.tile(1, 0), f.tile(2, 0)))).toBe('protected');
   });

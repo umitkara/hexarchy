@@ -1,5 +1,12 @@
 import type { GameEvent } from '../rules/events';
-import type { Age, BuildingKind, GameState, PlayerId, UnitLine } from '../state/game';
+import type {
+  Age,
+  BuildingKind,
+  GameState,
+  PlayerId,
+  StructureKind,
+  UnitLine,
+} from '../state/game';
 
 /**
  * Commands are the only way to change the game state. They are issued by the current
@@ -10,6 +17,9 @@ export type Command =
   | BuyUnitCommand
   | MoveUnitCommand
   | BuildCommand
+  | BuildEdgeCommand
+  | BreachEdgeCommand
+  | ArcherVolleyCommand
   | DebugPaintCommand
   | DebugSetAgeCommand;
 
@@ -47,6 +57,34 @@ export interface BuildCommand {
   readonly tile: number;
 }
 
+/**
+ * The worker on `worker` builds a structure on the edge between its tile and `to`, paid in
+ * materials from its region's treasury (GDD 5.3).
+ */
+export interface BuildEdgeCommand {
+  readonly type: 'buildEdge';
+  readonly structure: StructureKind;
+  readonly worker: number;
+  readonly to: number;
+}
+
+/**
+ * The unit on `from` strikes the structure on the edge between its tile and `to`: siege
+ * adds a hit, Sv3+ units break fences (GDD 7.4).
+ */
+export interface BreachEdgeCommand {
+  readonly type: 'breachEdge';
+  readonly from: number;
+  readonly to: number;
+}
+
+/** The archer on `from` shoots at the enemy unit on `target` (GDD 7.3). */
+export interface ArcherVolleyCommand {
+  readonly type: 'archerVolley';
+  readonly from: number;
+  readonly target: number;
+}
+
 /** Debug: sets a tile's owner (null = neutral), triggering splits and merges. */
 export interface DebugPaintCommand {
   readonly type: 'debugPaint';
@@ -69,9 +107,10 @@ export type CommandError =
   | 'unknownTile'
   /** The player id does not exist. */
   | 'unknownPlayer'
-  /** The unit line, building kind or age does not exist. */
+  /** The unit line, building kind, structure kind or age does not exist. */
   | 'unknownUnit'
   | 'unknownBuilding'
+  | 'unknownStructure'
   | 'unknownAge'
   /** Water and mountains cannot be owned. */
   | 'notOwnable'
@@ -93,7 +132,7 @@ export type CommandError =
   | 'notEnoughMaterials'
   /** The line needs an active building in the paying region (infantry: barracks). */
   | 'needsBuilding'
-  /** The player's age has not unlocked the building yet. */
+  /** The player's age has not unlocked the building, unit line or structure yet. */
   | 'ageLocked'
   /** A building goes only on a tile of the paying region. */
   | 'outsideRegion'
@@ -107,7 +146,7 @@ export type CommandError =
   | 'needsForest'
   /** The target is neither in the unit's area nor one step outside it. */
   | 'unreachable'
-  /** The target is next to the unit's area only across a river. */
+  /** The target is next to the unit's area only across a cutting edge (river, fence, wall). */
   | 'edgeBlocked'
   /** Workers cannot capture or attack. */
   | 'cannotCapture'
@@ -116,7 +155,37 @@ export type CommandError =
   /** Only units of the same (mergeable) line merge. */
   | 'cannotMerge'
   /** The merged level would exceed the player's level cap. */
-  | 'levelCap';
+  | 'levelCap'
+  /** The merged level would exceed the line's top level (archers: 3, ram: 1). */
+  | 'lineMaxLevel'
+  /** Only workers build edge structures. */
+  | 'cannotBuildEdges'
+  /** The edge must be a side of the unit's tile. */
+  | 'notAdjacent'
+  /** Bridges go on rivers only. */
+  | 'needsRiver'
+  /** Fences, walls and gates cannot stand on a river. */
+  | 'riverEdge'
+  /** The edge already holds a structure (that this one cannot replace). */
+  | 'edgeOccupied'
+  /** A gate goes on the player's own wall. */
+  | 'needsWall'
+  /** The unit cannot break structures: siege, or Sv3+ against fences. */
+  | 'cannotBreach'
+  /** No structure on the edge. */
+  | 'noStructure'
+  /** Players do not break their own structures. */
+  | 'ownStructure'
+  /** Only archers fire volleys. */
+  | 'cannotVolley'
+  /** The target is beyond the volley range. */
+  | 'outOfRange'
+  /** Volleys only target other players' units. */
+  | 'notEnemy'
+  /** The unit is already under a volley this turn (volleys do not stack). */
+  | 'alreadySuppressed'
+  /** The unit has no strength left to lose. */
+  | 'noEffect';
 
 export type Validation =
   { readonly ok: true } | { readonly ok: false; readonly error: CommandError };

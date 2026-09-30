@@ -41,6 +41,12 @@ export const PALETTE = {
   /** Status marks: a building idling for lack of gold, a hungry unit (GDD 4.5). */
   idleMark: 0x6b6f76,
   hungryMark: 0xf08a1c,
+  /** A unit under an archer volley (GDD 7.3). */
+  suppressedMark: 0x2c6fb0,
+  /** Edge structures: timber (fences, bridges), wall masonry, cracks of a damaged one. */
+  wood: 0x9a6a3a,
+  wallStone: 0x9c958a,
+  crack: 0x2a1d12,
 } as const;
 
 /**

@@ -1,24 +1,36 @@
 import {
+  breachOptions,
   BUILDING_KINDS,
   BUILDINGS,
   buildingUnlocked,
   buildOptions,
+  canBreach,
   checkBuildSource,
+  checkEdgeBuildSource,
   checkSource,
+  edgeBuildOptions,
   getRegions,
+  lineUnlocked,
   regionAt,
   regionCenter,
   RESOURCE_KINDS,
+  STRUCTURE_KINDS,
+  STRUCTURES,
+  structureUnlocked,
   turnStartForecast,
   UNIT_LINES,
   UNITS,
   UPKEEP,
+  volleyOptions,
+  type BreachSource,
   type BuildSource,
-  type CommandError,
+  type EdgeBuildSource,
   type GameState,
   type RegionTurnStart,
   type Resources,
+  type UnitLine,
   type UnitSource,
+  type VolleySource,
 } from '@hexarchy/engine';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { startPanelDrag } from '../input/dragDrop';
@@ -29,11 +41,16 @@ import {
   BUILDING_LABELS,
   CENTER_LABELS,
   COMMAND_ERROR_LABELS,
+  LINE_HINTS,
   LINE_LABELS,
   playerName,
   RESOURCE_LABELS,
+  STRUCTURE_HINTS,
+  STRUCTURE_LABELS,
+  unitName,
 } from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
+import { StructureIcon } from './StructureIcon';
 import { UnitIcon } from './UnitIcon';
 
 /** Income and expense of one resource at the next turn start (from the engine forecast). */
@@ -108,12 +125,13 @@ function HandButton({
 }
 
 const PLACE_HINT = 'Haritaya sürükle ya da dokun, sonra karoya dokun.';
+const EDGE_HINT = 'Dokun, sonra birimin karosunun bir kenarına ya da komşu karoya dokun.';
 
 /**
  * Treasury panel of the selected region (GDD 13: region selection → treasury panel): the
  * treasury with a per-resource forecast of the next turn start (the engine's own turn-start
- * code), and for the player on turn the recruit and build buttons: drag one onto the map,
- * or tap it, then a tile.
+ * code), and for the player on turn the selected unit's actions and the recruit and build
+ * buttons: drag one onto the map, or tap it, then a tile.
  */
 export function RegionPanel() {
   const game = useGameStore((s) => s.game);
@@ -132,7 +150,9 @@ export function RegionPanel() {
   const forecast =
     owner === null ? undefined : turnStartForecast(game, owner).find((f) => f.tiles.includes(tile));
   const warnings = forecast ? forecastWarnings(forecast, game) : [];
-  const canAct = controllable && owner === game.currentPlayer && centerTile !== undefined && center;
+  const own = controllable && owner === game.currentPlayer;
+  const canAct = own && centerTile !== undefined && center;
+  const unit = game.units[tile];
 
   return (
     <section className="hud-panel region-panel" aria-label="Bölge" aria-live="polite">
@@ -190,37 +210,129 @@ export function RegionPanel() {
           {text}
         </p>
       ))}
+      {own && unit && !unit.exhausted && <UnitActions game={game} tile={tile} />}
       {canAct && <RecruitButtons game={game} center={centerTile} />}
       {canAct && <BuildButtons game={game} center={centerTile} />}
     </section>
   );
 }
 
+/**
+ * What the selected unit can do besides moving: a worker builds edge structures, an archer
+ * shoots a volley, a ram (or a Sv3+ unit, at fences) strikes structures. Each button arms
+ * the action and its targets light up on the map.
+ */
+function UnitActions({ game, tile }: { readonly game: GameState; readonly tile: number }) {
+  const unit = game.units[tile];
+  if (!unit) return null;
+  const player = game.currentPlayer;
+  const line = UNITS[unit.line];
+  const buttons: ReactNode[] = [];
+
+  if (line.buildsEdges) {
+    for (const structure of STRUCTURE_KINDS) {
+      if (!structureUnlocked(game, player, structure)) continue;
+      const source: EdgeBuildSource = { kind: 'edge', from: tile, structure };
+      const check = checkEdgeBuildSource(game, source);
+      const fits = check.ok && edgeBuildOptions(game, source).some((o) => o.check.ok);
+      const name = STRUCTURE_LABELS[structure];
+      const { cost } = STRUCTURES[structure];
+      const reason = !check.ok
+        ? COMMAND_ERROR_LABELS[check.error]
+        : fits
+          ? EDGE_HINT
+          : 'Bu karonun kenarlarında uygun yer yok.';
+      buttons.push(
+        <HandButton
+          key={structure}
+          source={source}
+          enabled={fits}
+          title={`${name}: ${cost} malzeme. ${STRUCTURE_HINTS[structure]} ${reason}`}
+        >
+          <StructureIcon structure={structure} player={player} />
+          <span className="recruit-label">{name}</span>
+          <span className="recruit-cost cost-materials">{cost}</span>
+        </HandButton>,
+      );
+    }
+  }
+  if (line.volley) {
+    const source: VolleySource = { kind: 'volley', from: tile };
+    const targets = volleyOptions(game, source).filter((o) => o.check.ok).length;
+    const reason = targets > 0 ? 'Dokun, sonra hedefe dokun.' : 'Menzilde hedef yok.';
+    buttons.push(
+      <HandButton
+        key="volley"
+        source={source}
+        enabled={targets > 0}
+        title={`Baskı atışı: 2 karo içindeki bir düşman birimi tur sonuna dek −1 güç. ${reason}`}
+      >
+        <UnitIcon line={unit.line} level={unit.level} player={player} />
+        <span className="recruit-label">Baskı atışı</span>
+      </HandButton>,
+    );
+  }
+  if (canBreach(unit)) {
+    const source: BreachSource = { kind: 'breach', from: tile };
+    const targets = breachOptions(game, source).filter((o) => o.check.ok).length;
+    const what = line.siege ? 'kenar yapısına bir vuruş' : 'düşman çitini yıkar';
+    const reason = targets > 0 ? EDGE_HINT : 'Kenarlarda kırılacak düşman yapısı yok.';
+    buttons.push(
+      <HandButton
+        key="breach"
+        source={source}
+        enabled={targets > 0}
+        title={`Kır: ${what}; birim yerinde kalır. ${reason}`}
+      >
+        <UnitIcon line={unit.line} level={unit.level} player={player} />
+        <span className="recruit-label">Kır</span>
+      </HandButton>,
+    );
+  }
+  if (buttons.length === 0) return null;
+  return (
+    <>
+      <p className="hud-meta region-note" title={LINE_HINTS[unit.line]}>
+        {unitName(unit)} eylemleri
+      </p>
+      <div className="recruit" role="group" aria-label="Birim eylemleri">
+        {buttons}
+      </div>
+    </>
+  );
+}
+
 function RecruitButtons({ game, center }: { readonly game: GameState; readonly center: number }) {
-  const blockers = new Set<CommandError>();
-  const buttons = UNIT_LINES.map((line) => {
+  const player = game.currentPlayer;
+  const missing: UnitLine[] = [];
+  const lines = UNIT_LINES.filter((line) => lineUnlocked(game, player, line));
+  const buttons = lines.map((line) => {
     const source: UnitSource = { kind: 'recruit', center, line };
     const { cost, buyLevel } = UNITS[line];
     const check = checkSource(game, source);
-    if (!check.ok) blockers.add(check.error);
+    if (!check.ok && check.error === 'needsBuilding') missing.push(line);
     const title = check.ok
-      ? `${LINE_LABELS[line]}: ${cost} altın. ${PLACE_HINT}`
+      ? `${LINE_LABELS[line]}: ${cost} altın. ${LINE_HINTS[line]} ${PLACE_HINT}`
       : `${LINE_LABELS[line]}: ${COMMAND_ERROR_LABELS[check.error]}`;
     return (
       <HandButton key={line} source={source} enabled={check.ok} title={title}>
-        <UnitIcon line={line} level={Math.max(1, buyLevel)} player={game.currentPlayer} />
+        <UnitIcon line={line} level={Math.max(1, buyLevel)} player={player} />
         <span className="recruit-label">{LINE_LABELS[line]}</span>
         <span className="recruit-cost cost-gold">{cost}</span>
       </HandButton>
     );
+  });
+  const needs = missing.flatMap((line) => {
+    const building = UNITS[line].requires;
+    return building ? [`${LINE_LABELS[line]}: ${BUILDING_LABELS[building].toLowerCase()}`] : [];
   });
   return (
     <>
       <div className="recruit" role="group" aria-label="Asker al">
         {buttons}
       </div>
-      {blockers.has('needsBuilding') && (
-        <p className="hud-meta region-note">Piyade için bölgede çalışan bir kışla gerekir.</p>
+      {needs.length > 0 && (
+        <p className="hud-meta region-note">Bölgede çalışan bina gerekir · {needs.join(' · ')}</p>
       )}
     </>
   );

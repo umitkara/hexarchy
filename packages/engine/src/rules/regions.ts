@@ -1,12 +1,13 @@
 import { isDraft } from 'immer';
 import { axialToPixel } from '../hex/layout';
 import type { GameState, PlayerId } from '../state/game';
-import { mapGrid, type GameMap } from '../state/map';
+import { mapGrid } from '../state/map';
+import type { EdgeState } from './edgeState';
 import { treasuryLinked } from './treasuryGraph';
 
 /**
  * Regions (GDD 4.2): connected components of one player's tiles in the treasury graph.
- * Derived data: always computed from ownership and edges, never stored.
+ * Derived data: always computed from ownership and edges (rivers, bridges), never stored.
  */
 
 export interface Region {
@@ -26,8 +27,8 @@ export interface RegionMap {
 
 export const NO_REGION = -1;
 
-export function computeRegions(map: GameMap, owners: readonly (PlayerId | null)[]): RegionMap {
-  const grid = mapGrid(map);
+export function computeRegions(edges: EdgeState, owners: readonly (PlayerId | null)[]): RegionMap {
+  const grid = mapGrid(edges.map);
   const regionOf = new Int32Array(grid.tileCount).fill(NO_REGION);
   const regions: Region[] = [];
   for (let start = 0; start < grid.tileCount; start++) {
@@ -40,7 +41,7 @@ export function computeRegions(map: GameMap, owners: readonly (PlayerId | null)[
     for (const tile of tiles) {
       for (const n of grid.neighbors(tile)) {
         if (regionOf[n] !== NO_REGION || owners[n] !== owner) continue;
-        if (!treasuryLinked(map, tile, n)) continue;
+        if (!treasuryLinked(edges, tile, n)) continue;
         regionOf[n] = id;
         tiles.push(n);
       }
@@ -52,19 +53,31 @@ export function computeRegions(map: GameMap, owners: readonly (PlayerId | null)[
 
 const regionCache = new WeakMap<
   readonly (PlayerId | null)[],
-  { readonly edges: GameMap['edges']; readonly regions: RegionMap }
+  {
+    readonly edges: GameState['map']['edges'];
+    readonly structures: GameState['edgeStructures'];
+    readonly regions: RegionMap;
+  }
 >();
 
 /**
- * Regions of a state, memoized per ownership snapshot. Immutable states share the
+ * Regions of a state, memoized per ownership and edge snapshot. Immutable states share the
  * `owners` array until ownership changes, so repeated lookups (UI, AI) are free.
  */
-export function getRegions(state: Pick<GameState, 'map' | 'owners'>): RegionMap {
-  if (isDraft(state.owners)) return computeRegions(state.map, state.owners);
+export function getRegions(state: Pick<GameState, 'map' | 'owners' | 'edgeStructures'>): RegionMap {
+  if (isDraft(state.owners) || isDraft(state.edgeStructures)) {
+    return computeRegions(state, state.owners);
+  }
   const cached = regionCache.get(state.owners);
-  if (cached?.edges === state.map.edges) return cached.regions;
-  const regions = computeRegions(state.map, state.owners);
-  regionCache.set(state.owners, { edges: state.map.edges, regions });
+  if (cached?.edges === state.map.edges && cached.structures === state.edgeStructures) {
+    return cached.regions;
+  }
+  const regions = computeRegions(state, state.owners);
+  regionCache.set(state.owners, {
+    edges: state.map.edges,
+    structures: state.edgeStructures,
+    regions,
+  });
   return regions;
 }
 
@@ -86,10 +99,10 @@ export function regionCenter(
  * one farthest (in steps through the region) from the region's edge. Ties go to the tile
  * nearest the region's middle, then to the lowest index. Deterministic, no RNG.
  */
-export function innermostTile(map: GameMap, regionMap: RegionMap, region: Region): number {
-  const grid = mapGrid(map);
+export function innermostTile(edges: EdgeState, regionMap: RegionMap, region: Region): number {
+  const grid = mapGrid(edges.map);
   const inRegion = (tile: number) => regionMap.regionOf[tile] === region.id;
-  const linked = (a: number, b: number) => inRegion(b) && treasuryLinked(map, a, b);
+  const linked = (a: number, b: number) => inRegion(b) && treasuryLinked(edges, a, b);
 
   // Edge tiles have a side that does not lead into the region: off-map, another owner,
   // neutral, water or a cut edge. Depth = steps from the nearest edge tile.

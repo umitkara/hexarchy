@@ -1,9 +1,11 @@
+import type { EdgeKey } from '../hex/edge';
 import type {
   Age,
   BuildingKind,
   CenterKind,
   PlayerId,
   Resources,
+  StructureKind,
   Unit,
   UnitLine,
 } from '../state/game';
@@ -154,6 +156,57 @@ export type GameEvent =
       readonly tile: number;
       readonly building: BuildingKind;
       readonly owner: PlayerId;
+    }
+  /**
+   * A worker built an edge structure (replacing the player's own fence or wall if
+   * `replaces`), paid with materials from a region's treasury (GDD 5.3).
+   */
+  | {
+      readonly type: 'edgeBuilt';
+      readonly player: PlayerId;
+      readonly center: number;
+      readonly worker: number;
+      readonly edge: EdgeKey;
+      readonly structure: StructureKind;
+      readonly replaces: StructureKind | null;
+      readonly cost: number;
+    }
+  /** A siege unit on `unitTile` hit a structure that still stands (GDD 7.4). */
+  | {
+      readonly type: 'edgeDamaged';
+      readonly player: PlayerId;
+      readonly unitTile: number;
+      readonly edge: EdgeKey;
+      readonly structure: StructureKind;
+      readonly owner: PlayerId;
+      readonly damage: number;
+      readonly hits: number;
+    }
+  /** The unit on `unitTile` brought a structure down (GDD 7.4). */
+  | {
+      readonly type: 'edgeDestroyed';
+      readonly player: PlayerId;
+      readonly unitTile: number;
+      readonly edge: EdgeKey;
+      readonly structure: StructureKind;
+      readonly owner: PlayerId;
+    }
+  /** A structure passed to the player who now owns both of its sides (GDD 5.3). */
+  | {
+      readonly type: 'edgeCaptured';
+      readonly edge: EdgeKey;
+      readonly structure: StructureKind;
+      readonly from: PlayerId;
+      readonly to: PlayerId;
+    }
+  /** The archer on `from` shot at `target`: −1 strength until the turn ends (GDD 7.3). */
+  | {
+      readonly type: 'volley';
+      readonly player: PlayerId;
+      readonly from: number;
+      readonly target: number;
+      readonly owner: PlayerId;
+      readonly unit: Unit;
     }
   /** Forest spread onto these plains tiles of `player` at their turn start (GDD 4.6). */
   | { readonly type: 'forestSpread'; readonly player: PlayerId; readonly tiles: readonly number[] }

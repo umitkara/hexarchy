@@ -291,6 +291,7 @@ describe('tower (GDD 5.2, 7.1)', () => {
       level: 3,
       exhausted: false,
       hungry: false,
+      suppressed: false,
     });
     expect(run(strong, move(f.tile(1, 0), f.tile(2, 0))).state.owners[f.tile(2, 0)]).toBe(0);
   });
@@ -341,9 +342,10 @@ describe('forecast = what happens (GDD 13: treasury panel)', () => {
         level: 2,
         exhausted: false,
         hungry: true,
+        suppressed: false,
       }),
       f.tile(2, 0),
-      { line: 'infantry', level: 1, exhausted: false, hungry: true },
+      { line: 'infantry', level: 1, exhausted: false, hungry: true, suppressed: false },
     );
     const [region] = turnStartForecast(hungry, 0);
     expect(region).toMatchObject({

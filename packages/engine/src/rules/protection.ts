@@ -1,17 +1,18 @@
-import { BUILDINGS, CENTER_PROTECTION, COUNTER_BONUS } from '../balance';
-import { edgeKey } from '../hex/edge';
+import { BUILDINGS, CENTER_PROTECTION, COUNTER_BONUS, UNITS } from '../balance';
 import type { BuildingKind, CenterKind, GameState, PlayerId, Unit } from '../state/game';
-import { mapGrid, type EdgeFeature, type GameMap } from '../state/map';
+import { mapGrid } from '../state/map';
+import { openRiver, structureAt, type EdgeState } from './edgeState';
 import { unitStrength } from './units';
 
 /**
  * Protection (GDD 7.1): who defends a tile, and with what strength.
  *
  * A tile is protected by its owner's unit on it, the owner's units on adjacent tiles, the
- * owner's region center and active towers on it or next to it. Melee units and centers
- * protect across a ford but not across a river; towers protect across any edge (archers
- * follow in M5). Hungry units protect at their reduced strength. Derived data: computed
- * from the state, never stored.
+ * owner's region center and active towers on it or next to it, and the owner's archers up
+ * to two tiles away. Melee units and centers protect across fords, bridges and gates, but
+ * not across rivers, fences or walls; archers and towers protect across any edge. Hungry
+ * and suppressed units protect at their reduced strength. Derived data: computed from the
+ * state, never stored.
  */
 
 export type Protector =
@@ -37,47 +38,65 @@ export type Protector =
       readonly building: BuildingKind;
     };
 
-/** True if melee and center protection reach across this edge (GDD 7.1). */
-export function edgeCarriesProtection(feature: EdgeFeature | undefined): boolean {
-  return feature?.kind !== 'river';
+/** True if melee and center protection reach across the edge between `a` and `b`. */
+export function protectionLinked(state: EdgeState, a: number, b: number): boolean {
+  if (openRiver(state, a, b)) return false;
+  const kind = structureAt(state, a, b)?.kind;
+  return kind !== 'fence' && kind !== 'wall';
 }
 
-export function protectionLinked(map: GameMap, a: number, b: number): boolean {
-  return edgeCarriesProtection(map.edges[edgeKey(a, b)]);
-}
+type ProtectionState = Pick<
+  GameState,
+  'map' | 'owners' | 'centers' | 'units' | 'buildings' | 'edgeStructures'
+>;
 
-type ProtectionState = Pick<GameState, 'map' | 'owners' | 'centers' | 'units' | 'buildings'>;
+/** Widest protection radius of any unit line. */
+const MAX_RADIUS = Math.max(...Object.values(UNITS).map((u) => u.protectionRadius));
+
+/**
+ * `tile`, then its neighbors in direction order, then the ring beyond them, and so on up to
+ * `radius`; each with its distance from `tile`.
+ */
+function rings(state: Pick<GameState, 'map'>, tile: number, radius: number) {
+  const grid = mapGrid(state.map);
+  const seen = new Set([tile]);
+  const result = [{ tile, distance: 0 }];
+  // Breadth-first: the array iterator also visits entries pushed during the loop.
+  for (const { tile: t, distance } of result) {
+    if (distance >= radius) continue;
+    for (const n of grid.neighbors(t)) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      result.push({ tile: n, distance: distance + 1 });
+    }
+  }
+  return result;
+}
 
 /**
  * Everything that protects `tile`: the tile itself first, then its neighbors in direction
- * order; per tile the unit, then the center, then the building. Neutral tiles have no
- * protectors. Units of strength 0 (workers, hungry militia) protect nothing: every
- * attacker beats them anyway.
+ * order, then the tiles two steps away; per tile the unit, then the center, then the
+ * building. Neutral tiles have no protectors. Units of strength 0 (workers, hungry
+ * militia) protect nothing: every attacker beats them anyway.
  */
 export function protectorsOf(state: ProtectionState, tile: number): Protector[] {
   const owner = state.owners[tile] ?? null;
   if (owner === null) return [];
-  const grid = mapGrid(state.map);
   const protectors: Protector[] = [];
-  for (const t of [tile, ...grid.neighbors(tile)]) {
+  for (const { tile: t, distance } of rings(state, tile, MAX_RADIUS)) {
     if (state.owners[t] !== owner) continue;
-    const building = state.buildings[t];
-    const strength = building && !building.idle ? BUILDINGS[building.kind].protection : 0;
-    const tower =
-      building && strength > 0
-        ? ({ kind: 'building', tile: t, owner, strength, building: building.kind } as const)
-        : undefined;
-    if (t !== tile && !protectionLinked(state.map, tile, t)) {
-      // Towers protect across rivers too.
-      if (tower) protectors.push(tower);
-      continue;
-    }
+    // Melee protection (units, centers) reaches a neighbor only across an open edge.
+    const linked = distance === 0 || (distance === 1 && protectionLinked(state, tile, t));
+
     const unit = state.units[t];
     if (unit && unitStrength(unit) > 0) {
-      protectors.push({ kind: 'unit', tile: t, owner, strength: unitStrength(unit), unit });
+      const { protectionRadius, rangedProtection } = UNITS[unit.line];
+      if (distance <= protectionRadius && (rangedProtection || linked)) {
+        protectors.push({ kind: 'unit', tile: t, owner, strength: unitStrength(unit), unit });
+      }
     }
     const center = state.centers[t];
-    if (center) {
+    if (center && linked) {
       protectors.push({
         kind: 'center',
         tile: t,
@@ -86,16 +105,28 @@ export function protectorsOf(state: ProtectionState, tile: number): Protector[] 
         center: center.kind,
       });
     }
-    if (tower) protectors.push(tower);
+    // Towers protect their tile and its neighbors across any edge.
+    const building = state.buildings[t];
+    const strength = building && !building.idle ? BUILDINGS[building.kind].protection : 0;
+    if (building && strength > 0 && distance <= 1) {
+      protectors.push({ kind: 'building', tile: t, owner, strength, building: building.kind });
+    }
   }
   return protectors;
 }
 
-/** The attacker's strength against one defender: level + counter bonus (GDD 7.1, 7.2). */
+/** The counter bonus of `attacker` against one defender (GDD 7.2), 0 if none. */
+export function counterBonus(attacker: Unit, defender: Protector): number {
+  return defender.kind === 'unit' ? (COUNTER_BONUS[attacker.line]?.[defender.unit.line] ?? 0) : 0;
+}
+
+/**
+ * The attacker's strength against one defender (GDD 7.1, 7.2): level + counter bonus.
+ * Siege has full strength against centers and towers but none against units.
+ */
 export function strengthAgainst(attacker: Unit, defender: Protector): number {
-  const bonus =
-    defender.kind === 'unit' ? (COUNTER_BONUS[attacker.line]?.[defender.unit.line] ?? 0) : 0;
-  return unitStrength(attacker) + bonus;
+  if (UNITS[attacker.line].siege && defender.kind === 'unit') return 0;
+  return unitStrength(attacker) + counterBonus(attacker, defender);
 }
 
 /**

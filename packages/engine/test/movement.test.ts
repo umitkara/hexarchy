@@ -72,6 +72,7 @@ describe('movement (GDD 6.4)', () => {
       level: 0,
       exhausted: false,
       hungry: false,
+      suppressed: false,
     });
   });
 

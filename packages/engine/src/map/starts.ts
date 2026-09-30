@@ -37,7 +37,8 @@ export function startTerritory(map: GameMap, capital: number, size: number): num
   for (const tile of territory) {
     for (const n of grid.neighbors(tile)) {
       if (territory.length >= size) return territory;
-      if (seen.has(n) || !ownable(map, n) || !treasuryLinked(map, tile, n)) continue;
+      if (seen.has(n) || !ownable(map, n) || !treasuryLinked({ map, edgeStructures: {} }, tile, n))
+        continue;
       seen.add(n);
       territory.push(n);
     }

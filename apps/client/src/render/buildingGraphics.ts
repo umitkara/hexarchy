@@ -59,14 +59,32 @@ export function drawBuildingEmblem(
 }
 
 /** A small status mark on an icon's upper right: an idle building or a hungry unit. */
-export function drawStatusMark(g: Graphics, c: Point, size: number, kind: 'idle' | 'hungry'): void {
+export function drawStatusMark(
+  g: Graphics,
+  c: Point,
+  size: number,
+  kind: 'idle' | 'hungry' | 'suppressed',
+): void {
   const r = 0.12 * size;
-  const x = c.x + 0.25 * size;
+  // Suppression sits on the upper left, so a hungry and suppressed unit shows both.
+  const x = c.x + (kind === 'suppressed' ? -0.25 : 0.25) * size;
   const y = c.y - 0.25 * size;
+  const fill = {
+    idle: PALETTE.idleMark,
+    hungry: PALETTE.hungryMark,
+    suppressed: PALETTE.suppressedMark,
+  };
   g.circle(x, y, r)
-    .fill(kind === 'idle' ? PALETTE.idleMark : PALETTE.hungryMark)
+    .fill(fill[kind])
     .stroke({ width: Math.max(1, 0.025 * size), color: PALETTE.iconOutline });
-  if (kind === 'idle') {
+  if (kind === 'suppressed') {
+    // An arrow striking down.
+    g.moveTo(x, y - 0.55 * r)
+      .lineTo(x, y + 0.5 * r)
+      .moveTo(x - 0.4 * r, y + 0.1 * r)
+      .lineTo(x, y + 0.5 * r)
+      .lineTo(x + 0.4 * r, y + 0.1 * r);
+  } else if (kind === 'idle') {
     // Pause: two bars.
     for (const dx of [-0.32, 0.32]) {
       g.moveTo(x + dx * r, y - 0.45 * r).lineTo(x + dx * r, y + 0.45 * r);

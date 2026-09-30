@@ -1,27 +1,38 @@
-import { edgeKey } from '../hex/edge';
 import type { GameState, PlayerId } from '../state/game';
-import { mapGrid, type EdgeFeature, type GameMap } from '../state/map';
+import { mapGrid } from '../state/map';
+import { openRiver, structureAt, type EdgeState } from './edgeState';
 
 /**
  * Movement graph (GDD 3.2, 6.4): units move freely within their owner's tiles that are
- * connected in this graph, and one step beyond. A river edge cuts it; a ford connects.
- * Bridges (connect) and fences/walls/gates (cut; gates open for their owner) join in M5.
- * Derived data: computed from ownership and edges, never stored.
+ * connected in this graph, and step beyond it. A river cuts it unless bridged; a ford
+ * connects. Fences and walls cut it for everyone, their builder included; a gate is open
+ * to its owner only. Derived data: computed from ownership and edges, never stored.
  */
-export function edgeAllowsMovement(feature: EdgeFeature | undefined): boolean {
-  return feature?.kind !== 'river';
-}
 
-/** True if a unit can step between two adjacent tiles (ignoring ownership). */
-export function movementLinked(map: GameMap, a: number, b: number): boolean {
-  return edgeAllowsMovement(map.edges[edgeKey(a, b)]);
+/** True if a unit of `player` can step between two adjacent tiles (ignoring ownership). */
+export function movementLinked(state: EdgeState, a: number, b: number, player: PlayerId): boolean {
+  if (openRiver(state, a, b)) return false;
+  const structure = structureAt(state, a, b);
+  switch (structure?.kind) {
+    case undefined:
+    case 'bridge':
+      return true;
+    case 'fence':
+    case 'wall':
+      return false;
+    case 'gate':
+      return structure.owner === player;
+  }
 }
 
 /**
  * The tiles a unit on `tile` moves among freely: the tile's owner's tiles connected to it
  * in the movement graph, `tile` included, ascending. Empty for a neutral tile.
  */
-export function movementArea(state: Pick<GameState, 'map' | 'owners'>, tile: number): number[] {
+export function movementArea(
+  state: Pick<GameState, 'map' | 'owners' | 'edgeStructures'>,
+  tile: number,
+): number[] {
   const owner = state.owners[tile] ?? null;
   if (owner === null) return [];
   const grid = mapGrid(state.map);
@@ -30,7 +41,7 @@ export function movementArea(state: Pick<GameState, 'map' | 'owners'>, tile: num
   // Breadth-first: the array iterator also visits entries pushed during the loop.
   for (const t of area) {
     for (const n of grid.neighbors(t)) {
-      if (seen.has(n) || state.owners[n] !== owner || !movementLinked(state.map, t, n)) continue;
+      if (seen.has(n) || state.owners[n] !== owner || !movementLinked(state, t, n, owner)) continue;
       seen.add(n);
       area.push(n);
     }
@@ -40,10 +51,10 @@ export function movementArea(state: Pick<GameState, 'map' | 'owners'>, tile: num
 
 /**
  * Tiles next to `area` that are not `player`'s, ascending. `linked`: reachable in one step
- * through the movement graph; `blocked`: adjacent only across cutting edges (rivers).
+ * through `player`'s movement graph; `blocked`: adjacent only across cutting edges.
  */
 export function tilesAround(
-  state: Pick<GameState, 'map' | 'owners'>,
+  state: Pick<GameState, 'map' | 'owners' | 'edgeStructures'>,
   area: readonly number[],
   player: PlayerId,
 ): { readonly linked: number[]; readonly blocked: number[] } {
@@ -55,7 +66,7 @@ export function tilesAround(
     for (const n of grid.neighbors(t)) {
       if (inArea.has(n) || state.owners[n] === player) continue;
       adjacent.add(n);
-      if (movementLinked(state.map, t, n)) linked.add(n);
+      if (movementLinked(state, t, n, player)) linked.add(n);
     }
   }
   const ascending = (a: number, b: number) => a - b;

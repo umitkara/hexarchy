@@ -46,7 +46,11 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
                    turnStart.ts turnStartForecast = tur başı ekonomisi (gelir → bakım → açlık);
                    applyTurnStart aynı tahmini uygular (kasa paneli tahmini = gerçek)
                    forest.ts orman yayılması (rng.ts ile)
+                   edgeState.ts kenar = doğal özellik (dere/geçit) + yapı; hareket, kasa ve
+                   koruma grafları kenarları buradan okur; structures.ts kenar yapısı kurma/
+                   kırma kuralları + sahiplik (karar 30); volley.ts okçu baskı atışı
   src/commands/    Command birliği + validate/apply (Immer) → {state, events};
+                   edges.ts buildEdge/breachEdge uygulaması;
                    history.ts tur içi geri al, legal.ts legalCommands (AI/fuzz için)
   src/balance.ts   TÜM denge sayıları burada
   src/rng.ts       tohumlu RNG — tüm rastgelelik buradan
@@ -56,9 +60,11 @@ apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), kamera; dragDrop.ts panelden haritaya sürükleme
   src/ui/          React HUD (canvas üstünde overlay)
-  src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina =
+  src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina/eylem =
                    HandSource, sürükleme, hotseat); komutlar `dispatch` ile
                    render/tileLayout.ts: merkez + bina + birim aynı karodaysa ikon yerleri
+                   render/structureGraphics.ts kenar yapıları; kenar eylemlerinde (işçi yapısı,
+                   kır) birimin kendi karosunda kenara yakın dokunuş o kenarı seçer (scene.ts)
 ```
 
 ## Mimari sınır kuralı (ihlal edilemez)

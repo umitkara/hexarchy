@@ -48,6 +48,7 @@ export function createGame(options: CreateGameOptions): GameState {
     centers,
     units,
     buildings,
+    edgeStructures: {},
     rng: createRngState(deriveSeed(seed, 'game')),
   };
 }

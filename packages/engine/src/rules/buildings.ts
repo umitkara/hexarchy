@@ -53,7 +53,14 @@ export type BuildSourceCheck =
 
 type RulesState = Pick<
   GameState,
-  'map' | 'owners' | 'centers' | 'units' | 'buildings' | 'players' | 'currentPlayer'
+  | 'map'
+  | 'owners'
+  | 'centers'
+  | 'units'
+  | 'buildings'
+  | 'edgeStructures'
+  | 'players'
+  | 'currentPlayer'
 >;
 
 /** True if `player`'s age has unlocked the building (GDD 9.1). */

@@ -1,22 +1,49 @@
+import { UNITS } from '../balance';
 import { buildOptions } from '../rules/buildings';
-import { getRegions, regionCenter } from '../rules/regions';
 import { targetOptions, type UnitSource } from '../rules/placement';
-import { BUILDING_KINDS, UNIT_LINES, unitTiles, type GameState } from '../state/game';
+import { getRegions, regionCenter } from '../rules/regions';
+import { breachOptions, edgeBuildOptions } from '../rules/structures';
+import { volleyOptions } from '../rules/volley';
+import {
+  BUILDING_KINDS,
+  STRUCTURE_KINDS,
+  UNIT_LINES,
+  unitTiles,
+  type GameState,
+} from '../state/game';
 import type { Command } from './types';
 
 /**
- * Every legal non-debug command of the current player: unit moves, purchases, buildings
- * and ending the turn. Built from the same rules as `validate`, for the AI and tests.
+ * Every legal non-debug command of the current player: unit moves, volleys, edge strikes
+ * and edge building, purchases, buildings and ending the turn. Built from the same rules
+ * as `validate`, for the AI and tests.
  */
 export function legalCommands(state: GameState): Command[] {
   const player = state.currentPlayer;
   const commands: Command[] = [];
 
   for (const from of unitTiles(state)) {
-    if (state.owners[from] !== player) continue;
+    const unit = state.units[from];
+    if (!unit || state.owners[from] !== player || unit.exhausted) continue;
     const source: UnitSource = { kind: 'unit', from };
     for (const { tile, check } of targetOptions(state, source)) {
       if (check.ok) commands.push({ type: 'moveUnit', from, to: tile });
+    }
+    const line = UNITS[unit.line];
+    if (line.volley) {
+      for (const { tile, check } of volleyOptions(state, { kind: 'volley', from })) {
+        if (check.ok) commands.push({ type: 'archerVolley', from, target: tile });
+      }
+    }
+    for (const { to, check } of breachOptions(state, { kind: 'breach', from })) {
+      if (check.ok) commands.push({ type: 'breachEdge', from, to });
+    }
+    if (line.buildsEdges) {
+      for (const structure of STRUCTURE_KINDS) {
+        for (const { to, check } of edgeBuildOptions(state, { kind: 'edge', from, structure })) {
+          if (check.ok) commands.push({ type: 'buildEdge', structure, worker: from, to });
+        }
+      }
     }
   }
 

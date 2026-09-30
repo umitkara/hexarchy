@@ -77,7 +77,13 @@ describe('starvation and rebellion (GDD 4.5)', () => {
 
   it('hungry units fight and protect at −1 strength', () => {
     expect(HUNGER.strengthPenalty).toBe(1);
-    const unit = { line: 'infantry', level: 2, exhausted: false, hungry: true } as const;
+    const unit = {
+      line: 'infantry',
+      level: 2,
+      exhausted: false,
+      hungry: true,
+      suppressed: false,
+    } as const;
     expect(unitStrength(unit)).toBe(1);
     expect(unitStrength({ ...unit, level: 1 })).toBe(0);
 
@@ -149,9 +155,10 @@ describe('starvation and rebellion (GDD 4.5)', () => {
       level: 1,
       exhausted: false,
       hungry: true,
+      suppressed: false,
     });
     const merged = run(state, move(g.tile(1, 0), g.tile(2, 0))).state;
-    expect(merged.units[g.tile(2, 0)]).toMatchObject({ level: 2, hungry: true });
+    expect(merged.units[g.tile(2, 0)]).toMatchObject({ level: 2, hungry: true, suppressed: false });
   });
 });
 

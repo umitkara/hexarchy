@@ -14,14 +14,18 @@ import {
 import { Container, Graphics, type Application } from 'pixi.js';
 import { attachCameraControls, type DragHandler } from '../input/cameraControls';
 import { registerMapPicker } from '../input/dragDrop';
-import { canControl, gameStore, type GameStoreState } from '../store/gameStore';
+import { canControl, gameStore, isEdgeSource, type GameStoreState } from '../store/gameStore';
 import { Camera } from './camera';
 import { drawBuildings } from './buildingGraphics';
 import { createLayers } from './layers';
 import { drawEdges, drawHover, drawTerrain, TILE_SIZE } from './mapGraphics';
+import { drawStructures } from './structureGraphics';
 import { drawTargets, ShieldPreview } from './targetGraphics';
 import { drawCenters, drawSelection, drawTerritory } from './territoryGraphics';
 import { drawUnits } from './unitGraphics';
+
+/** Within this share of the tile size from the unit's tile center, no side is picked. */
+const EDGE_PICK_INNER = 0.35;
 
 /** Sea margin (in tiles) around the land that the camera may show. */
 const VIEW_MARGIN_TILES = 1.5;
@@ -48,6 +52,12 @@ function activeSource(state: GameStoreState) {
   return state.drag?.source ?? state.armed;
 }
 
+/** The unit tile of an edge action in hand (its sides are the targets), else null. */
+function edgeFrom(state: GameStoreState): number | null {
+  const source = activeSource(state);
+  return isEdgeSource(source) ? source.from : null;
+}
+
 /** Tile whose unit is lifted by a drag (drawn faint in place). */
 function draggedFrom(state: GameStoreState): number | null {
   return state.drag?.source.kind === 'unit' ? state.drag.source.from : null;
@@ -70,7 +80,8 @@ export function createScene(app: Application): () => void {
   const territoryBorders = new Graphics();
   layers.territory.addChild(territoryFill, territoryBorders);
   const edges = new Graphics();
-  layers.edges.addChild(edges);
+  const structures = new Graphics();
+  layers.edges.addChild(edges, structures);
   const centers = new Graphics();
   const buildings = new Graphics();
   layers.buildings.addChild(centers, buildings);
@@ -122,9 +133,10 @@ export function createScene(app: Application): () => void {
   drawTerritory(territoryFill, territoryBorders, initial.game);
   drawCenters(centers, initial.game);
   drawBuildings(buildings, initial.game);
+  drawStructures(structures, initial.game);
   drawUnits(units, initial.game, null);
   drawSelection(selection, initial.game, initial.selectedTile);
-  drawHover(hover, initial.game.map, initial.hoveredTile);
+  drawHover(hover, initial.game.map, initial.hoveredTile, edgeFrom(initial));
   renderPreview();
 
   const unsubscribe = gameStore.subscribe((state, previous) => {
@@ -139,6 +151,9 @@ export function createScene(app: Application): () => void {
     const layoutChanged =
       territoryChanged || game.units !== old.units || game.buildings !== old.buildings;
     if (territoryChanged) drawTerritory(territoryFill, territoryBorders, game);
+    if (game.map !== old.map || game.edgeStructures !== old.edgeStructures) {
+      drawStructures(structures, game);
+    }
     if (layoutChanged) {
       drawCenters(centers, game);
       drawBuildings(buildings, game);
@@ -152,8 +167,12 @@ export function createScene(app: Application): () => void {
     if (territoryChanged || state.selectedTile !== previous.selectedTile) {
       drawSelection(selection, game, state.selectedTile);
     }
-    if (game.map !== old.map || state.hoveredTile !== previous.hoveredTile) {
-      drawHover(hover, game.map, state.hoveredTile);
+    if (
+      game.map !== old.map ||
+      state.hoveredTile !== previous.hoveredTile ||
+      edgeFrom(state) !== edgeFrom(previous)
+    ) {
+      drawHover(hover, game.map, state.hoveredTile, edgeFrom(state));
     }
     if (
       game !== old ||
@@ -167,11 +186,37 @@ export function createScene(app: Application): () => void {
     if (game.map === old.map && game.currentPlayer !== old.currentPlayer) centerOnCapital(game);
   });
 
+  /**
+   * The tile under a screen point. With an edge action in hand, a point near a side of the
+   * acting unit's own tile picks the tile across that side: the edge is the target, and
+   * either of its tiles selects it (large targets for touch).
+   */
   const tileAt = (screen: Point | null): number | null => {
     if (!screen) return null;
-    const hex = pixelToAxial(camera.screenToWorld(screen), TILE_SIZE);
-    const index = mapGrid(gameStore.getState().game.map).indexOf(hex.q, hex.r);
-    return index < 0 ? null : index;
+    const state = gameStore.getState();
+    const grid = mapGrid(state.game.map);
+    const world = camera.screenToWorld(screen);
+    const hex = pixelToAxial(world, TILE_SIZE);
+    const index = grid.indexOf(hex.q, hex.r);
+    if (index < 0) return null;
+    const from = edgeFrom(state);
+    if (from !== index) return index;
+    const center = axialToPixel(grid.coord(index), TILE_SIZE);
+    const dx = world.x - center.x;
+    const dy = world.y - center.y;
+    // The middle of the tile is the unit itself (a tap there puts it down).
+    if (Math.hypot(dx, dy) < TILE_SIZE * EDGE_PICK_INNER) return index;
+    let best = index;
+    let bestDot = -Infinity;
+    for (const n of grid.neighbors(index)) {
+      const c = axialToPixel(grid.coord(n), TILE_SIZE);
+      const dot = (c.x - center.x) * dx + (c.y - center.y) * dy;
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = n;
+      }
+    }
+    return best;
   };
 
   /** A drag that starts on a movable unit of the player on turn picks the unit up. */

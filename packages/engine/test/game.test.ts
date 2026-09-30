@@ -47,7 +47,13 @@ describe('createGame (GDD 4.7)', () => {
         );
         expect(workers).toHaveLength(START.workers);
         for (const [tile, unit] of workers) {
-          expect(unit).toEqual({ line: 'worker', level: 0, exhausted: false, hungry: false });
+          expect(unit).toEqual({
+            line: 'worker',
+            level: 0,
+            exhausted: false,
+            hungry: false,
+            suppressed: false,
+          });
           expect(grid.distance(Number(tile), capitalOf(game, player.id) ?? -1)).toBe(1);
         }
       }

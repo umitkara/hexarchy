@@ -1,12 +1,19 @@
 import { expect } from 'vitest';
-import { BUILDINGS, MAX_UNIT_LEVEL } from '../../src/balance';
+import { BUILDINGS, MAX_UNIT_LEVEL, STRUCTURES, UNITS } from '../../src/balance';
+import { edgeTiles } from '../../src/hex';
 import { computeRegions } from '../../src/rules/regions';
-import { buildingTiles, centerTiles, unitTiles, type GameState } from '../../src/state/game';
-import { isOwnable } from '../../src/state/map';
+import {
+  buildingTiles,
+  centerTiles,
+  structureEdges,
+  unitTiles,
+  type GameState,
+} from '../../src/state/game';
+import { isOwnable, mapGrid } from '../../src/state/map';
 
 /** Asserts the center invariants of GDD 4.2 (see `GameState.centers`). */
 export function expectCenterInvariants(state: GameState): void {
-  const { regions, regionOf } = computeRegions(state.map, state.owners);
+  const { regions, regionOf } = computeRegions(state, state.owners);
   for (const tile of centerTiles(state)) {
     expect(state.owners[tile], `center ${tile} must be owned`).not.toBeNull();
   }
@@ -41,9 +48,11 @@ export function expectUnitInvariants(state: GameState): void {
     else {
       expect(unit.level).toBeGreaterThanOrEqual(1);
       expect(unit.level).toBeLessThanOrEqual(MAX_UNIT_LEVEL);
+      expect(unit.level, `${unit.line} on ${tile}`).toBeLessThanOrEqual(UNITS[unit.line].maxLevel);
     }
-    // Only the player on turn can have exhausted units.
+    // Only the player on turn can have exhausted units; only the others suppressed ones.
     if (unit.exhausted) expect(owner).toBe(state.currentPlayer);
+    if (unit.suppressed) expect(owner).not.toBe(state.currentPlayer);
   }
 }
 
@@ -62,6 +71,27 @@ export function expectBuildingInvariants(state: GameState): void {
   }
 }
 
+/** Asserts the edge structure invariants (see `GameState.edgeStructures`, GDD 5.3). */
+export function expectStructureInvariants(state: GameState): void {
+  const grid = mapGrid(state.map);
+  for (const key of structureEdges(state)) {
+    const structure = state.edgeStructures[key];
+    if (!structure) continue;
+    const [a, b] = edgeTiles(key);
+    expect(grid.areAdjacent(a, b), `structure on ${key}`).toBe(true);
+    for (const t of [a, b]) expect(isOwnable(state.map.tiles[t]?.terrain ?? 'sea')).toBe(true);
+    const river = state.map.edges[key]?.kind === 'river';
+    expect(river, `${structure.kind} on ${key}`).toBe(STRUCTURES[structure.kind].onRiver);
+    expect(Number.isInteger(structure.damage)).toBe(true);
+    expect(structure.damage).toBeGreaterThanOrEqual(0);
+    expect(structure.damage).toBeLessThan(STRUCTURES[structure.kind].hits);
+    expect(state.players.some((p) => p.id === structure.owner)).toBe(true);
+    // Land on both sides of one player carries that player's structure (decision 30).
+    const side = state.owners[a] ?? null;
+    if (side !== null && side === state.owners[b]) expect(structure.owner, key).toBe(side);
+  }
+}
+
 /** Treasuries never go negative. */
 export function expectTreasuryInvariants(state: GameState): void {
   for (const tile of centerTiles(state)) {
@@ -77,5 +107,6 @@ export function expectInvariants(state: GameState): void {
   expectCenterInvariants(state);
   expectUnitInvariants(state);
   expectBuildingInvariants(state);
+  expectStructureInvariants(state);
   expectTreasuryInvariants(state);
 }

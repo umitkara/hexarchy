@@ -27,7 +27,7 @@ export interface Tile {
 
 /**
  * Natural edge features created by map generation (GDD 3.2). Built edge structures
- * (bridge, fence, wall, gate) join in M5.
+ * (bridge, fence, wall, gate) live in `GameState.edgeStructures`.
  * - `river`: blocks movement and splits treasuries.
  * - `ford`: a shallow river crossing; passable and connects treasuries.
  */

@@ -5,6 +5,14 @@ import type { GameState } from '../state/game';
 import { applyBuild, validateBuild } from './build';
 import { applyDebugPaint, validateDebugPaint } from './debugPaint';
 import { applyDebugSetAge, validateDebugSetAge } from './debugSetAge';
+import {
+  applyArcherVolley,
+  applyBreachEdge,
+  applyBuildEdge,
+  validateArcherVolley,
+  validateBreachEdge,
+  validateBuildEdge,
+} from './edges';
 import type { Command, CommandResult, Validation } from './types';
 import { applyBuyUnit, applyMoveUnit, validateBuyUnit, validateMoveUnit } from './units';
 
@@ -21,6 +29,12 @@ export function validate(state: GameState, command: Command): Validation {
       return validateMoveUnit(state, command);
     case 'build':
       return validateBuild(state, command);
+    case 'buildEdge':
+      return validateBuildEdge(state, command);
+    case 'breachEdge':
+      return validateBreachEdge(state, command);
+    case 'archerVolley':
+      return validateArcherVolley(state, command);
     case 'debugPaint':
       return validateDebugPaint(state, command);
     case 'debugSetAge':
@@ -59,6 +73,15 @@ export function apply(state: GameState, command: Command): CommandResult {
         break;
       case 'build':
         applyBuild(draft, command, events);
+        break;
+      case 'buildEdge':
+        applyBuildEdge(state, draft, command, events);
+        break;
+      case 'breachEdge':
+        applyBreachEdge(state, draft, command, events);
+        break;
+      case 'archerVolley':
+        applyArcherVolley(state, draft, command, events);
         break;
       case 'debugPaint':
         applyDebugPaint(draft, command, events);

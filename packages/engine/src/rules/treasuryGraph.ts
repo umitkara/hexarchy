@@ -1,16 +1,10 @@
-import { edgeKey } from '../hex/edge';
-import type { EdgeFeature, GameMap } from '../state/map';
+import { openRiver, type EdgeState } from './edgeState';
 
 /**
  * Treasury graph (GDD 3.2, 4.2): which adjacent tiles pool their resources when owned by
- * the same player. A river edge cuts the link; a ford connects. Bridges (connect) and
- * fences/walls/gates (do not cut) join in M5.
+ * the same player. A river cuts the link unless it is bridged; a ford connects. Fences,
+ * walls and gates do not cut it.
  */
-export function edgeLinksTreasury(feature: EdgeFeature | undefined): boolean {
-  return feature?.kind !== 'river';
-}
-
-/** True if two adjacent tiles are linked in the treasury graph (ignoring ownership). */
-export function treasuryLinked(map: GameMap, a: number, b: number): boolean {
-  return edgeLinksTreasury(map.edges[edgeKey(a, b)]);
+export function treasuryLinked(state: EdgeState, a: number, b: number): boolean {
+  return !openRiver(state, a, b);
 }

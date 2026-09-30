@@ -5,13 +5,16 @@ import { Rng } from '../src/rng';
 import { turnStartForecast, type GameEvent } from '../src/rules';
 import {
   BUILDING_KINDS,
+  STRUCTURE_KINDS,
   capitalOf,
   centerTiles,
   createGame,
   mapGrid,
   unitTiles,
+  type Center,
   type GameState,
 } from '../src/state';
+import { parseFixture } from './fixtures/ascii';
 import { expectInvariants } from './fixtures/invariants';
 
 /**
@@ -34,6 +37,21 @@ function randomPlay(game: GameState, seed: number, steps: number) {
     state = result.state;
   }
   return { state, commands, events };
+}
+
+/** A game where every player is in the Feudal Age with a rich capital: every line and structure. */
+function feudalGame(seed: number): GameState {
+  const game = createGame({ seed });
+  const centers: Record<number, Center> = {};
+  for (const tile of centerTiles(game)) {
+    const center = game.centers[tile];
+    if (center) centers[tile] = { ...center, treasury: { gold: 200, food: 200, materials: 200 } };
+  }
+  return {
+    ...game,
+    players: game.players.map((p) => ({ ...p, age: 'feudal' as const })),
+    centers,
+  };
 }
 
 function replay(game: GameState, commands: readonly Command[]): GameState {
@@ -95,6 +113,50 @@ describe('invariant fuzz', () => {
     expect(counts.starvations).toBeGreaterThan(0);
   });
 
+  it('keeps every invariant with all lines and edge structures (Feudal Age)', () => {
+    // A small contested field: both sides have every production building, and a river
+    // with a ford runs between them.
+    const field = parseFixture(
+      `
+      A*  A   Ak  Ar  .   Bs  B   B*
+        A   Aw  Ax |.   .   Bw  Bk  B
+      A   A   As  .   f  |B   Bx  Br
+        A   Aw  .   .  =.   B   Bw  B
+      A   A   A   .   h   .   B   B
+      `,
+      { age: 'feudal', treasury: { gold: 150, food: 150, materials: 150 } },
+    ).state;
+    const counts: Partial<Record<GameEvent['type'], number>> = {};
+    const lines = new Set<string>();
+    for (const seed of [61, 62, 63, 64]) {
+      const rng = Rng.fromSeed(seed);
+      let state = field;
+      for (let i = 0; i < 300; i++) {
+        const legal = legalCommands(state);
+        for (const command of legal) expect(validate(state, command)).toEqual({ ok: true });
+        // Favour the rarer commands a little so they show up in every run.
+        const rare = legal.filter((c) => c.type === 'archerVolley' || c.type === 'breachEdge');
+        const command =
+          rare.length > 0 && rng.chance(0.5)
+            ? rng.pick(rare)
+            : rng.chance(0.1)
+              ? legal.at(-1)
+              : rng.pick(legal);
+        if (!command) throw new Error('No legal command');
+        const { state: next, events } = apply(state, command);
+        expectInvariants(next);
+        for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
+        for (const t of unitTiles(next)) lines.add(next.units[t]?.line ?? '');
+        state = next;
+      }
+    }
+    expect(lines).toEqual(new Set(['worker', 'infantry', 'archer', 'cavalry', 'siege']));
+    expect(counts.edgeBuilt).toBeGreaterThan(5);
+    expect(counts.volley).toBeGreaterThan(0);
+    expect((counts.edgeDamaged ?? 0) + (counts.edgeDestroyed ?? 0)).toBeGreaterThan(0);
+    expect(counts.edgeCaptured).toBeGreaterThan(0);
+  });
+
   it('forecasts every turn start exactly (treasury panel = real turn start)', () => {
     let checked = 0;
     for (const seed of [51, 52]) {
@@ -133,8 +195,17 @@ describe('invariant fuzz', () => {
     const game = createGame({ seed: 41 });
     let valid = 0;
     let builds = 0;
-    // At the start (materials for a building or two) and after some random play.
-    for (const state of [game, randomPlay(game, 4, 60).state]) {
+    let edges = 0;
+    // At the start (materials for a building or two) and after some random play, also with
+    // every line and structure unlocked.
+    const feudal = feudalGame(42);
+    const states = [
+      game,
+      randomPlay(game, 4, 60).state,
+      randomPlay(feudal, 5, 80).state,
+      randomPlay(feudal, 6, 160).state,
+    ];
+    for (const state of states) {
       const legal = new Set(legalCommands(state).map((c) => JSON.stringify(c)));
       const tiles = mapGrid(state.map).tileCount;
       const check = (command: Command) => {
@@ -142,10 +213,21 @@ describe('invariant fuzz', () => {
         expect(legal.has(JSON.stringify(command)), JSON.stringify(command)).toBe(ok);
         return ok ? 1 : 0;
       };
+      const grid = mapGrid(state.map);
       for (const from of unitTiles(state)) {
         for (let i = 0; i < 150; i++) {
           valid += check({ type: 'moveUnit', from, to: rng.int(0, tiles - 1) });
         }
+        // Edges: the six around the tile and a few random ones.
+        const near = [...grid.neighbors(from), rng.int(0, tiles - 1), rng.int(0, tiles - 1)];
+        for (const to of near) {
+          edges += check({ type: 'breachEdge', from, to });
+          for (const structure of STRUCTURE_KINDS) {
+            edges += check({ type: 'buildEdge', structure, worker: from, to });
+          }
+        }
+        const around = [...near, ...grid.neighbors(from).flatMap((n) => grid.neighbors(n))];
+        for (const target of around) check({ type: 'archerVolley', from, target });
       }
       for (const center of centerTiles(state)) {
         // Random tiles, plus every tile near the center (where most builds are valid).
@@ -163,5 +245,6 @@ describe('invariant fuzz', () => {
     }
     expect(valid).toBeGreaterThan(0);
     expect(builds).toBeGreaterThan(0);
+    expect(edges).toBeGreaterThan(0);
   });
 });

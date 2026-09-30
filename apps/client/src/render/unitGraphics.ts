@@ -13,24 +13,81 @@ import { PALETTE, playerColor } from './palette';
 import { tileLayout } from './tileLayout';
 
 /**
- * Unit tokens (GDD 14: flat vector). Infantry is a heater shield in the owner's color with
- * one chevron per level (rank stripes, countable at a glance); a worker is a round token
- * with a hammer. Exhausted units of the player on turn are faded.
+ * Unit tokens (GDD 14: flat vector), one silhouette per line in the owner's color with one
+ * chevron per level (rank stripes, countable at a glance): infantry a heater shield, archers
+ * a diamond, cavalry a swallowtail banner. A ram is a roofed body on wheels with its beam; a
+ * worker a round token with a hammer. Exhausted units of the player on turn are faded.
  */
 
 type UnitPoint = readonly [number, number];
 
-const SHIELD: readonly UnitPoint[] = [
-  [-0.3, -0.36],
-  [0.3, -0.36],
-  [0.3, 0.02],
-  [0.24, 0.17],
-  [0.12, 0.29],
-  [0, 0.36],
-  [-0.12, 0.29],
-  [-0.24, 0.17],
-  [-0.3, 0.02],
-];
+/** Body outlines in tile units (1 = tile size); the UI's SVG icons use the same points. */
+export const UNIT_BODIES: Readonly<
+  Record<'infantry' | 'archer' | 'cavalry', readonly UnitPoint[]>
+> = {
+  infantry: [
+    [-0.3, -0.36],
+    [0.3, -0.36],
+    [0.3, 0.02],
+    [0.24, 0.17],
+    [0.12, 0.29],
+    [0, 0.36],
+    [-0.12, 0.29],
+    [-0.24, 0.17],
+    [-0.3, 0.02],
+  ],
+  archer: [
+    [0, -0.42],
+    [0.36, 0],
+    [0, 0.42],
+    [-0.36, 0],
+  ],
+  cavalry: [
+    [-0.3, -0.36],
+    [0.3, -0.36],
+    [0.3, 0.38],
+    [0, 0.18],
+    [-0.3, 0.38],
+  ],
+};
+
+/** Chevron half-width and the center of the chevron stack, per body. */
+export const CHEVRONS: Readonly<
+  Record<keyof typeof UNIT_BODIES, { readonly half: number; readonly mid: number }>
+> = {
+  infantry: { half: 0.17, mid: -0.12 },
+  archer: { half: 0.13, mid: -0.02 },
+  cavalry: { half: 0.17, mid: -0.12 },
+};
+
+/** Chevron rows (y of each apex) for a level, top to bottom. */
+export function chevronRows(line: keyof typeof UNIT_BODIES, level: number): number[] {
+  const count = Math.max(1, Math.min(4, level));
+  const step = line === 'archer' ? 0.11 : 0.12;
+  const top = CHEVRONS[line].mid - ((count - 1) * step) / 2;
+  return Array.from({ length: count }, (_, i) => top + i * step);
+}
+
+/** The ram: roofed body, beam and wheels (tile units). */
+export const RAM = {
+  body: [
+    [-0.36, 0.14],
+    [-0.22, -0.2],
+    [0.16, -0.2],
+    [0.3, 0.14],
+  ] as readonly UnitPoint[],
+  beam: [
+    [0.04, -0.04],
+    [0.44, -0.04],
+    [0.44, 0.06],
+    [0.04, 0.06],
+  ] as readonly UnitPoint[],
+  wheels: [
+    [-0.18, 0.2],
+    [0.14, 0.2],
+  ] as readonly UnitPoint[],
+  wheelRadius: 0.1,
+};
 
 /** Draws one unit token centered at `c`; `size` is the tile size it is drawn for. */
 export function drawUnitToken(
@@ -50,37 +107,47 @@ export function drawUnitToken(
   };
   const at = ([x, y]: UnitPoint): [number, number] => [c.x + x * s, c.y + y * s];
 
-  if (unit.line === 'worker') {
-    g.circle(c.x, c.y, 0.26 * s)
-      .fill({ color, alpha })
-      .stroke(outline);
-    // Hammer: a handle and a head, tilted.
-    g.moveTo(...at([-0.1, 0.14]))
-      .lineTo(...at([0.08, -0.04]))
-      .stroke({ width: s * 0.07, color: PALETTE.iconStone, cap: 'round', alpha });
-    g.poly([at([-0.02, -0.16]), at([0.08, -0.26]), at([0.2, -0.14]), at([0.1, -0.04])].flat()).fill(
-      { color: PALETTE.iconStone, alpha },
-    );
-    return;
+  switch (unit.line) {
+    case 'worker':
+      g.circle(c.x, c.y, 0.26 * s)
+        .fill({ color, alpha })
+        .stroke(outline);
+      // Hammer: a handle and a head, tilted.
+      g.moveTo(...at([-0.1, 0.14]))
+        .lineTo(...at([0.08, -0.04]))
+        .stroke({ width: s * 0.07, color: PALETTE.iconStone, cap: 'round', alpha });
+      g.poly(
+        [at([-0.02, -0.16]), at([0.08, -0.26]), at([0.2, -0.14]), at([0.1, -0.04])].flat(),
+      ).fill({ color: PALETTE.iconStone, alpha });
+      return;
+    case 'siege':
+      g.poly(RAM.beam.flatMap(at)).fill({ color: PALETTE.wood, alpha }).stroke(outline);
+      g.poly(RAM.body.flatMap(at)).fill({ color, alpha }).stroke(outline);
+      for (const wheel of RAM.wheels) {
+        g.circle(...at(wheel), RAM.wheelRadius * s)
+          .fill({ color: PALETTE.iconStone, alpha })
+          .stroke(outline);
+      }
+      return;
+    case 'infantry':
+    case 'archer':
+    case 'cavalry': {
+      const line = unit.line;
+      g.poly(UNIT_BODIES[line].flatMap(at)).fill({ color, alpha }).stroke(outline);
+      const { half } = CHEVRONS[line];
+      for (const y of chevronRows(line, unit.level)) {
+        g.moveTo(...at([-half, y + 0.07]))
+          .lineTo(...at([0, y - 0.03]))
+          .lineTo(...at([half, y + 0.07]));
+      }
+      g.stroke({ width: s * 0.075, color: PALETTE.iconStone, cap: 'round', join: 'round', alpha });
+    }
   }
-
-  g.poly(SHIELD.flatMap(at)).fill({ color, alpha }).stroke(outline);
-  // Chevrons, top to bottom, centered in the shield.
-  const count = Math.max(1, Math.min(4, unit.level));
-  const step = 0.12;
-  const top = -0.12 - ((count - 1) * step) / 2;
-  for (let i = 0; i < count; i++) {
-    const y = top + i * step;
-    g.moveTo(...at([-0.17, y + 0.07]))
-      .lineTo(...at([0, y - 0.03]))
-      .lineTo(...at([0.17, y + 0.07]));
-  }
-  g.stroke({ width: s * 0.075, color: PALETTE.iconStone, cap: 'round', join: 'round', alpha });
 }
 
 /**
  * All units; `hidden` (a unit being dragged) is drawn as a faint placeholder. Hungry units
- * carry a minus mark (GDD 4.5: one strength less).
+ * carry a minus mark (GDD 4.5: one strength less), units under a volley an arrow (GDD 7.3).
  */
 export function drawUnits(g: Graphics, game: GameState, hidden: number | null): void {
   const grid = mapGrid(game.map);
@@ -94,6 +161,8 @@ export function drawUnits(g: Graphics, game: GameState, hidden: number | null): 
     const size = TILE_SIZE * slot.scale;
     const faded = tile === hidden ? 0.25 : unit.exhausted && owner === game.currentPlayer ? 0.5 : 1;
     drawUnitToken(g, slot.point, size, unit, playerColor(owner), faded);
-    if (unit.hungry && tile !== hidden) drawStatusMark(g, slot.point, size, 'hungry');
+    if (tile === hidden) continue;
+    if (unit.hungry) drawStatusMark(g, slot.point, size, 'hungry');
+    if (unit.suppressed) drawStatusMark(g, slot.point, size, 'suppressed');
   }
 }

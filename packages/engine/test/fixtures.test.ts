@@ -74,10 +74,34 @@ describe('ASCII fixtures', () => {
   it('reads units: infantry levels 1-4 and workers, on owned tiles', () => {
     const f = parseFixture('A*1 A2  fAw hB4 .');
     expect(f.state.units).toEqual({
-      [f.tile(0, 0)]: { line: 'infantry', level: 1, exhausted: false, hungry: false },
-      [f.tile(1, 0)]: { line: 'infantry', level: 2, exhausted: false, hungry: false },
-      [f.tile(2, 0)]: { line: 'worker', level: 0, exhausted: false, hungry: false },
-      [f.tile(3, 0)]: { line: 'infantry', level: 4, exhausted: false, hungry: false },
+      [f.tile(0, 0)]: {
+        line: 'infantry',
+        level: 1,
+        exhausted: false,
+        hungry: false,
+        suppressed: false,
+      },
+      [f.tile(1, 0)]: {
+        line: 'infantry',
+        level: 2,
+        exhausted: false,
+        hungry: false,
+        suppressed: false,
+      },
+      [f.tile(2, 0)]: {
+        line: 'worker',
+        level: 0,
+        exhausted: false,
+        hungry: false,
+        suppressed: false,
+      },
+      [f.tile(3, 0)]: {
+        line: 'infantry',
+        level: 4,
+        exhausted: false,
+        hungry: false,
+        suppressed: false,
+      },
     });
     expect(f.state.map.tiles[f.tile(3, 0)]?.terrain).toBe('hill');
     expect(renderFixture(f.state)).toBe('A*1 A2  fAw hB4 .');
@@ -88,8 +112,22 @@ describe('ASCII fixtures', () => {
       level: 1,
       exhausted: false,
       hungry: false,
+      suppressed: false,
     });
     expect(() => renderFixture(long)).toThrow(/does not fit/);
+  });
+
+  it('reads the other lines: archers, cavalry (with levels) and rams', () => {
+    const f = parseFixture('Aa  Aa3 Bc  Bc4 Am');
+    expect(Object.values(f.state.units).map((u) => [u?.line, u?.level])).toEqual([
+      ['archer', 1],
+      ['archer', 3],
+      ['cavalry', 1],
+      ['cavalry', 4],
+      ['siege', 1],
+    ]);
+    expect(renderFixture(f.state)).toBe('Aa  Aa3 Bc  Bc4 Am');
+    expect(() => parseFixture('Am2')).toThrow(/Bad fixture token/);
   });
 
   it('rejects malformed fixtures', () => {
