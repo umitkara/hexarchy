@@ -1,12 +1,17 @@
 import { expect } from 'vitest';
-import { BUILDINGS, MAX_UNIT_LEVEL, STRUCTURES, UNITS } from '../../src/balance';
+import { AGE_ADVANCE, BUILDINGS, MAX_UNIT_LEVEL, STRUCTURES, UNITS } from '../../src/balance';
 import { edgeTiles } from '../../src/hex';
 import { computeRegions } from '../../src/rules/regions';
 import {
+  activePlayers,
+  AGES,
   buildingTiles,
+  capitalOf,
   centerTiles,
+  nextAge,
   structureEdges,
   unitTiles,
+  winnerOf,
   type GameState,
 } from '../../src/state/game';
 import { isOwnable, mapGrid } from '../../src/state/map';
@@ -102,8 +107,49 @@ export function expectTreasuryInvariants(state: GameState): void {
   }
 }
 
+/**
+ * Asserts the player invariants (GDD 9.1, 11): an eliminated player owns nothing and never
+ * plays; an advance goes to the next age, within v0.1's ages; statistics per player.
+ */
+export function expectPlayerInvariants(state: GameState): void {
+  const last = AGES.indexOf(AGE_ADVANCE.lastAge);
+  expect(state.players[state.currentPlayer]?.eliminated, 'player on turn').toBeNull();
+  expect(state.stats).toHaveLength(state.players.length);
+  state.players.forEach((player, id) => {
+    expect(player.id).toBe(id);
+    if (player.eliminated) {
+      expect(state.owners.includes(id), `eliminated player ${id} owns tiles`).toBe(false);
+      expect(player.advancing).toBeNull();
+      expect(player.eliminated.by).not.toBe(id);
+      expect(player.eliminated.round).toBeLessThanOrEqual(state.round);
+    }
+    if (player.advancing) {
+      expect(player.advancing).toBe(nextAge(player.age));
+      expect(AGES.indexOf(player.advancing)).toBeLessThanOrEqual(last);
+    }
+    const tiles = state.owners.filter((o) => o === id).length;
+    expect(state.stats[id]?.peakTiles, `peak tiles of ${id}`).toBeGreaterThanOrEqual(tiles);
+  });
+  const active = activePlayers(state);
+  expect(active.length).toBeGreaterThanOrEqual(1);
+  expect(winnerOf(state)).toBe(active.length === 1 ? active[0] : null);
+}
+
+/**
+ * In a game that started with a capital for every player (createGame), a player is in the
+ * game exactly as long as they keep it (capitals only fall to conquest).
+ */
+export function expectCapitalInvariants(state: GameState): void {
+  for (const player of state.players) {
+    expect(capitalOf(state, player.id) !== undefined, `capital of ${player.id}`).toBe(
+      player.eliminated === null,
+    );
+  }
+}
+
 /** All state invariants at once. */
 export function expectInvariants(state: GameState): void {
+  expectPlayerInvariants(state);
   expectCenterInvariants(state);
   expectUnitInvariants(state);
   expectBuildingInvariants(state);

@@ -3,7 +3,16 @@ import { generateMap } from '../map/generate';
 import { placeStarts, startTerritory } from '../map/starts';
 import { createRngState, deriveSeed, normalizeSeed } from '../rng';
 import { newUnit } from '../rules/units';
-import type { Building, Center, GameState, Player, PlayerId, Unit } from './game';
+import {
+  emptyStats,
+  type Building,
+  type Center,
+  type GameState,
+  type Player,
+  type PlayerId,
+  type PlayerStats,
+  type Unit,
+} from './game';
 import { mapGrid } from './map';
 
 export interface CreateGameOptions {
@@ -28,6 +37,7 @@ export function createGame(options: CreateGameOptions): GameState {
   const centers: Record<number, Center> = {};
   const units: Record<number, Unit> = {};
   const buildings: Record<number, Building> = {};
+  const stats: PlayerStats[] = [];
   const players: Player[] = starts.map((capital, id) => {
     const territory = startTerritory(map, capital, START.territoryTiles);
     for (const tile of territory) owners[tile] = id;
@@ -36,7 +46,14 @@ export function createGame(options: CreateGameOptions): GameState {
     for (const tile of territory.slice(1, 1 + START.workers)) {
       units[tile] = newUnit('worker');
     }
-    return { id, controller: id === 0 ? 'human' : 'ai', age: START.age };
+    stats.push({ ...emptyStats(START.age, 1), peakTiles: territory.length });
+    return {
+      id,
+      controller: id === 0 ? 'human' : 'ai',
+      age: START.age,
+      advancing: null,
+      eliminated: null,
+    };
   });
 
   return {
@@ -49,6 +66,7 @@ export function createGame(options: CreateGameOptions): GameState {
     units,
     buildings,
     edgeStructures: {},
+    stats,
     rng: createRngState(deriveSeed(seed, 'game')),
   };
 }

@@ -1,4 +1,5 @@
 import { UNITS } from '../balance';
+import { checkAdvanceAge } from '../rules/ages';
 import { buildOptions } from '../rules/buildings';
 import { targetOptions, type UnitSource } from '../rules/placement';
 import { getRegions, regionCenter } from '../rules/regions';
@@ -6,6 +7,7 @@ import { breachOptions, edgeBuildOptions } from '../rules/structures';
 import { volleyOptions } from '../rules/volley';
 import {
   BUILDING_KINDS,
+  isGameOver,
   STRUCTURE_KINDS,
   UNIT_LINES,
   unitTiles,
@@ -15,10 +17,12 @@ import type { Command } from './types';
 
 /**
  * Every legal non-debug command of the current player: unit moves, volleys, edge strikes
- * and edge building, purchases, buildings and ending the turn. Built from the same rules
- * as `validate`, for the AI and tests.
+ * and edge building, purchases, buildings, advancing the age and ending the turn (always
+ * last). Built from the same rules as `validate`, for the AI and tests. None once the game
+ * is over.
  */
 export function legalCommands(state: GameState): Command[] {
+  if (isGameOver(state)) return [];
   const player = state.currentPlayer;
   const commands: Command[] = [];
 
@@ -63,6 +67,7 @@ export function legalCommands(state: GameState): Command[] {
     }
   }
 
+  if (checkAdvanceAge(state, player).ok) commands.push({ type: 'advanceAge' });
   commands.push({ type: 'endTurn' });
   return commands;
 }

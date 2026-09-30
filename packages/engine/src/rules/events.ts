@@ -53,15 +53,15 @@ export type GameEvent =
   /** A region of 2+ tiles without a center got an automatic local center (empty treasury). */
   | { readonly type: 'centerFounded'; readonly tile: number; readonly owner: PlayerId }
   /**
-   * A center disappeared with its treasury: its tile was taken (`captured`) or its
-   * region shrank to that single tile (`isolated`).
+   * A center disappeared with its treasury: its tile was taken (`captured`), its region
+   * shrank to that single tile (`isolated`) or its owner was eliminated (`eliminated`).
    */
   | {
       readonly type: 'centerRemoved';
       readonly tile: number;
       readonly owner: PlayerId;
       readonly kind: CenterKind;
-      readonly reason: 'captured' | 'isolated';
+      readonly reason: 'captured' | 'isolated' | 'eliminated';
       readonly lost: Resources;
     }
   /** Regions merged: the absorbed centers' treasuries were added to the surviving one. */
@@ -94,13 +94,16 @@ export type GameEvent =
       readonly tile: number;
       readonly unit: Unit;
     }
-  /** A unit died: its tile was taken (`captured`) or it starved into rebellion. */
+  /**
+   * A unit died: its tile was taken (`captured`), it starved into rebellion, or its owner
+   * was eliminated (`eliminated`).
+   */
   | {
       readonly type: 'unitKilled';
       readonly tile: number;
       readonly owner: PlayerId;
       readonly unit: Unit;
-      readonly reason: 'captured' | 'rebellion';
+      readonly reason: 'captured' | 'rebellion' | 'eliminated';
     }
   /** Turn-start unit upkeep paid from a region's treasury. */
   | {
@@ -210,6 +213,33 @@ export type GameEvent =
     }
   /** Forest spread onto these plains tiles of `player` at their turn start (GDD 4.6). */
   | { readonly type: 'forestSpread'; readonly player: PlayerId; readonly tiles: readonly number[] }
-  | { readonly type: 'ageChanged'; readonly player: PlayerId; readonly age: Age };
+  /** Debug: a player's age was set directly. */
+  | { readonly type: 'ageChanged'; readonly player: PlayerId; readonly age: Age }
+  /**
+   * The player paid for the next age from the capital's treasury (`center`); it arrives at
+   * their next turn start (GDD 9.1).
+   */
+  | {
+      readonly type: 'ageAdvanceStarted';
+      readonly player: PlayerId;
+      readonly center: number;
+      readonly age: Age;
+      readonly cost: Resources;
+    }
+  /** At the player's turn start, the age they paid for arrived. */
+  | { readonly type: 'ageReached'; readonly player: PlayerId; readonly age: Age }
+  /**
+   * `by` took the capital on `capital`: the player is out, and the rest of their land went
+   * neutral (GDD 11). The losses were reported just before.
+   */
+  | {
+      readonly type: 'playerEliminated';
+      readonly player: PlayerId;
+      readonly by: PlayerId;
+      readonly capital: number;
+      readonly round: number;
+    }
+  /** The last player standing won the game (GDD 11). */
+  | { readonly type: 'gameWon'; readonly player: PlayerId; readonly round: number };
 
 export type GameEventType = GameEvent['type'];

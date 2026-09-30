@@ -13,7 +13,7 @@ export type PlayerId = number;
 
 export type Controller = 'human' | 'ai';
 
-/** Ages (GDD 9.1). v0.1 plays Dark and Feudal; advancing arrives in M6. */
+/** Ages (GDD 9.1). v0.1 plays Dark and Feudal (see AGE_ADVANCE.lastAge). */
 export type Age = 'dark' | 'feudal' | 'castle' | 'imperial';
 
 export const AGES: readonly Age[] = ['dark', 'feudal', 'castle', 'imperial'];
@@ -23,10 +23,51 @@ export function ageAtLeast(age: Age, required: Age): boolean {
   return AGES.indexOf(age) >= AGES.indexOf(required);
 }
 
+/** The age after `age`, if any. */
+export function nextAge(age: Age): Age | undefined {
+  return AGES[AGES.indexOf(age) + 1];
+}
+
+/** How a player left the game (GDD 11): their capital fell in `round` to `by`. */
+export interface Elimination {
+  readonly round: number;
+  readonly by: PlayerId;
+}
+
 export interface Player {
   readonly id: PlayerId;
   readonly controller: Controller;
   readonly age: Age;
+  /**
+   * The age being advanced to (GDD 9.1): paid for, and reached at the player's next turn
+   * start. Null when not advancing.
+   */
+  readonly advancing: Age | null;
+  /** Set once the player's capital falls; they own nothing after that and never play. */
+  readonly eliminated: Elimination | null;
+}
+
+/**
+ * Per-player match statistics for the end screen: history that cannot be derived from the
+ * current state, counted from the events of the (non-debug) commands (see rules/stats).
+ */
+export interface PlayerStats {
+  /** Round in which each age was reached. */
+  readonly ageRounds: Readonly<Partial<Record<Age, number>>>;
+  /** Tiles taken by capturing or attacking. */
+  readonly tilesCaptured: number;
+  /** Units of other players killed by taking their tiles. */
+  readonly unitsKilled: number;
+  /** Own units lost: tiles taken, rebellion, elimination. */
+  readonly unitsLost: number;
+  /** Sum of all turn-start incomes. */
+  readonly income: Resources;
+  readonly unitsBought: number;
+  readonly buildingsBuilt: number;
+  readonly structuresBuilt: number;
+  /** Most tiles owned at once, and the first round that happened in. */
+  readonly peakTiles: number;
+  readonly peakRound: number;
 }
 
 /** The three resources (GDD 4.1). */
@@ -177,6 +218,8 @@ export interface GameState {
    * river, the others never do; if both tiles have one owner, the structure is theirs.
    */
   readonly edgeStructures: Readonly<Partial<Record<EdgeKey, EdgeStructure>>>;
+  /** Match statistics, indexed like `players`. */
+  readonly stats: readonly PlayerStats[];
   /** State of the seeded RNG for in-game randomness. */
   readonly rng: RngState;
 }
@@ -215,4 +258,39 @@ export function capitalOf(
   return centerTiles(state).find(
     (tile) => state.centers[tile]?.kind === 'capital' && state.owners[tile] === player,
   );
+}
+
+export function isEliminated(state: Pick<GameState, 'players'>, player: PlayerId): boolean {
+  return (state.players[player]?.eliminated ?? null) !== null;
+}
+
+/** Players still in the game, in turn order. */
+export function activePlayers(state: Pick<GameState, 'players'>): PlayerId[] {
+  return state.players.filter((p) => p.eliminated === null).map((p) => p.id);
+}
+
+/** The last player standing (GDD 11), or null while two or more remain. */
+export function winnerOf(state: Pick<GameState, 'players'>): PlayerId | null {
+  const active = activePlayers(state);
+  return active.length === 1 ? (active[0] ?? null) : null;
+}
+
+export function isGameOver(state: Pick<GameState, 'players'>): boolean {
+  return winnerOf(state) !== null;
+}
+
+/** Statistics of a player at the start of a game. */
+export function emptyStats(startAge: Age, round: number): PlayerStats {
+  return {
+    ageRounds: { [startAge]: round },
+    tilesCaptured: 0,
+    unitsKilled: 0,
+    unitsLost: 0,
+    income: emptyResources(),
+    unitsBought: 0,
+    buildingsBuilt: 0,
+    structuresBuilt: 0,
+    peakTiles: 0,
+    peakRound: round,
+  };
 }

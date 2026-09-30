@@ -15,6 +15,7 @@ export function validateDebugPaint(state: GameState, command: DebugPaintCommand)
   if (owner !== null && !state.players.some((p) => p.id === owner)) {
     return { ok: false, error: 'unknownPlayer' };
   }
+  if (owner !== null && state.players[owner]?.eliminated) return { ok: false, error: 'eliminated' };
   if (owner !== null && !isOwnable(terrain)) return { ok: false, error: 'notOwnable' };
   if (current === owner) return { ok: false, error: 'noChange' };
   if (state.centers[tile]?.kind === 'capital') return { ok: false, error: 'capitalLocked' };

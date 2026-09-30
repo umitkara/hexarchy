@@ -480,6 +480,21 @@ export const FOREST_SPREAD = {
 /** Merging adds levels (Slay sum) up to this level (GDD 6.2). */
 export const MAX_UNIT_LEVEL = 4;
 
+/**
+ * Advancing an age (GDD 9.1) [DRAFT costs]: paid from the capital region's treasury; the
+ * new age arrives at the player's next turn start (a one-turn risk window).
+ */
+export const AGE_ADVANCE = {
+  /** The last age a player can reach (v0.1 plays Dark and Feudal, PLAN 1). */
+  lastAge: 'feudal' satisfies Age,
+  /** Price of reaching each age. */
+  cost: {
+    feudal: { gold: 50, food: 30, materials: 20 },
+    castle: { gold: 120, food: 80, materials: 60 },
+    imperial: { gold: 250, food: 150, materials: 120 },
+  } satisfies Readonly<Record<Exclude<Age, 'dark'>, Resources>>,
+} as const;
+
 /** Highest level reachable by merging, by the owner's age (GDD 9.1). */
 export const LEVEL_CAP = {
   dark: 2,

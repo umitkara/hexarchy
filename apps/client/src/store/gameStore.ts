@@ -2,6 +2,7 @@ import {
   applyToHistory,
   canUndo,
   createGame,
+  isGameOver,
   normalizeSeed,
   startHistory,
   undo,
@@ -77,7 +78,11 @@ export interface GameStoreState {
   /** Debug paint mode: taps set the tile owner to `paintOwner` (null = neutral). */
   readonly painting: boolean;
   readonly paintOwner: PlayerId | null;
-  /** Events of the last applied command, for the debug log. */
+  /** The age panel (advance button, price, unlocks) is open. */
+  readonly agePanelOpen: boolean;
+  /** The end screen was put away to look at the final map. */
+  readonly resultsHidden: boolean;
+  /** Events of the last applied command, for the debug log and the news banner. */
   readonly lastEvents: readonly GameEvent[];
   /** Why the last command was refused; cleared by the next successful one. */
   readonly lastError: { readonly error: CommandError; readonly id: number } | null;
@@ -98,6 +103,8 @@ export interface GameStoreState {
   readonly setHotseat: (hotseat: boolean) => void;
   readonly setPainting: (painting: boolean) => void;
   readonly setPaintOwner: (owner: PlayerId | null) => void;
+  readonly setAgePanelOpen: (open: boolean) => void;
+  readonly setResultsHidden: (hidden: boolean) => void;
 }
 
 const SEED_PARAM = 'seed';
@@ -120,10 +127,26 @@ function writeSeedToUrl(seed: number): void {
   window.history.replaceState(null, '', url);
 }
 
-/** True if the human at the screen may act for the player on turn. */
+/** True if the human at the screen may act for the player on turn (never once it is over). */
 export function canControl(state: Pick<GameStoreState, 'game' | 'hotseat'>): boolean {
   const { game, hotseat } = state;
+  if (isGameOver(game)) return false;
   return hotseat || game.players[game.currentPlayer]?.controller === 'human';
+}
+
+/**
+ * True once the match is decided for the screen: a player has won, or — playing against the
+ * AI — the human has been eliminated.
+ */
+export function isDecided(state: Pick<GameStoreState, 'game' | 'hotseat'>): boolean {
+  const { game, hotseat } = state;
+  if (isGameOver(game)) return true;
+  return !hotseat && game.players.some((p) => p.controller === 'human' && p.eliminated !== null);
+}
+
+/** True if this turn's moves can be taken back (not the one that ended the game). */
+export function canUndoTurn(state: Pick<GameStoreState, 'history'>): boolean {
+  return canUndo(state.history) && !isGameOver(state.history.present);
 }
 
 /** The command that puts a source's unit or building on `tile`. */
@@ -186,6 +209,7 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     const { hotseat } = get();
     for (let i = 0; !hotseat && i < result.history.present.players.length; i++) {
       const { present } = result.history;
+      if (isGameOver(present)) break;
       if (present.players[present.currentPlayer]?.controller !== 'ai') break;
       result = applyToHistory(result.history, { type: 'endTurn' });
       events.push(...result.events);
@@ -207,13 +231,21 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     hotseat: true,
     painting: false,
     paintOwner: 0,
+    agePanelOpen: false,
+    resultsHidden: false,
     lastEvents: [],
     lastError: null,
 
     newGame(seed) {
       const game = createGame({ seed });
       writeSeedToUrl(game.map.seed);
-      setHistory(startHistory(game), { selectedTile: null, lastEvents: [], lastError: null });
+      setHistory(startHistory(game), {
+        selectedTile: null,
+        lastEvents: [],
+        lastError: null,
+        agePanelOpen: false,
+        resultsHidden: false,
+      });
     },
 
     dispatch(command) {
@@ -229,13 +261,15 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     },
 
     undo() {
-      const { history } = get();
-      if (canUndo(history)) setHistory(undo(history), { lastEvents: [], lastError: null });
+      const state = get();
+      if (canUndoTurn(state)) setHistory(undo(state.history), { lastEvents: [], lastError: null });
     },
 
     undoTurn() {
-      const { history } = get();
-      if (canUndo(history)) setHistory(undoTurn(history), { lastEvents: [], lastError: null });
+      const state = get();
+      if (canUndoTurn(state)) {
+        setHistory(undoTurn(state.history), { lastEvents: [], lastError: null });
+      }
     },
 
     setHoveredTile(tile) {
@@ -310,6 +344,14 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
 
     setPaintOwner(owner) {
       set({ paintOwner: owner, painting: true, armed: null });
+    },
+
+    setAgePanelOpen(open) {
+      set({ agePanelOpen: open });
+    },
+
+    setResultsHidden(hidden) {
+      set({ resultsHidden: hidden });
     },
   };
 });

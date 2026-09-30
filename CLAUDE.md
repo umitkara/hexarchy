@@ -39,7 +39,8 @@ Tek paket için: `pnpm --filter @hexarchy/engine test:watch`.
 ```
 packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir, build adımı yok)
   src/hex, map, state, rules, commands, ai/   (PLAN.md 2.1)
-  src/state/game.ts   GameState (düz JSON); src/state/setup.ts createGame
+  src/state/game.ts   GameState (düz JSON; oyuncu advancing/eliminated, stats); activePlayers,
+                   winnerOf, isGameOver; src/state/setup.ts createGame
   src/rules/       saf kural fonksiyonları (bölgeler, merkezler, ekonomi, tur, hareket, koruma,
                    yerleştirme = checkPlacement/targetOptions, bakım); draft üzerinde
                    buildings.ts checkBuild/buildOptions/buildingOutput (bina kuralları + üretim)
@@ -49,8 +50,12 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
                    edgeState.ts kenar = doğal özellik (dere/geçit) + yapı; hareket, kasa ve
                    koruma grafları kenarları buradan okur; structures.ts kenar yapısı kurma/
                    kırma kuralları + sahiplik (karar 30); volley.ts okçu baskı atışı
-  src/commands/    Command birliği + validate/apply (Immer) → {state, events};
-                   edges.ts buildEdge/breachEdge uygulaması;
+                   ages.ts çağ atlama (checkAdvanceAge, ageUnlocks; geçiş tur başında,
+                   gelirden önce tamamlanır); elimination.ts takeTile = karo alma + başkent
+                   fethinde eleme/tarafsızlaştırma + zafer; stats.ts recordStats = maç
+                   istatistikleri komut olaylarından sayılır (debug hariç)
+  src/commands/    Command birliği + validate/apply (Immer) → {state, events}; oyun bitince
+                   her komut 'gameOver'; edges.ts buildEdge/breachEdge; ages.ts advanceAge;
                    history.ts tur içi geri al, legal.ts legalCommands (AI/fuzz için)
   src/balance.ts   TÜM denge sayıları burada
   src/rng.ts       tohumlu RNG — tüm rastgelelik buradan
@@ -59,9 +64,11 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
 apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), kamera; dragDrop.ts panelden haritaya sürükleme
-  src/ui/          React HUD (canvas üstünde overlay)
+  src/ui/          React HUD (canvas üstünde overlay); AgePanel.tsx çağ düğmesi + paneli,
+                   GameOver.tsx bitiş ekranı, Notice.tsx hata bildirimi + büyük haber bandı
   src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina/eylem =
-                   HandSource, sürükleme, hotseat); komutlar `dispatch` ile
+                   HandSource, sürükleme, hotseat, agePanelOpen, resultsHidden); komutlar
+                   `dispatch` ile; isDecided = oyun bitti ya da (AI'a karşı) insan elendi
                    render/tileLayout.ts: merkez + bina + birim aynı karodaysa ikon yerleri
                    render/structureGraphics.ts kenar yapıları; kenar eylemlerinde (işçi yapısı,
                    kır) birimin kendi karosunda kenara yakın dokunuş o kenarı seçer (scene.ts)

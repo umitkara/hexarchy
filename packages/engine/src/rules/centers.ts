@@ -25,7 +25,8 @@ import { removeUnit } from './upkeep';
  *   center of the region that was largest before the merge, then the one with more gold,
  *   then the lowest tile index.
  * - A captured center (its tile changes owner) is destroyed with its treasury; the rest of
- *   its region is then handled like any piece without a center.
+ *   its region is then handled like any piece without a center. A captured capital
+ *   eliminates its owner instead (see elimination.ts).
  * - A unit on a tile that changes owner dies (an attacker then moves in).
  * - A building changes hands with its tile; it is lost if the tile becomes neutral.
  * - An edge structure passes to a player who comes to own both of its sides (GDD 5.3).
@@ -36,6 +37,11 @@ import { removeUnit } from './upkeep';
 export interface OwnerChange {
   readonly tile: number;
   readonly owner: PlayerId | null;
+  /**
+   * Why the tile changes hands, for the events of what is lost on it: taken (default) or
+   * left neutral by its owner's elimination (GDD 11).
+   */
+  readonly cause?: 'captured' | 'eliminated';
 }
 
 /**
@@ -49,7 +55,7 @@ export function changeOwners(
 ): void {
   // Slicing a draft array of primitives yields a plain snapshot.
   const previousOwners = draft.owners.slice();
-  for (const { tile, owner } of changes) {
+  for (const { tile, owner, cause = 'captured' } of changes) {
     const from = draft.owners[tile] ?? null;
     if (from === owner) continue;
     const center = draft.centers[tile];
@@ -59,14 +65,14 @@ export function changeOwners(
         tile,
         owner: from,
         kind: center.kind,
-        reason: 'captured',
+        reason: cause,
         lost: { ...center.treasury },
       });
       removeCenter(draft, tile);
     }
     const unit = draft.units[tile];
     if (unit && from !== null) {
-      events.push({ type: 'unitKilled', tile, owner: from, unit: { ...unit }, reason: 'captured' });
+      events.push({ type: 'unitKilled', tile, owner: from, unit: { ...unit }, reason: cause });
       removeUnit(draft, tile);
     }
     const building = draft.buildings[tile];

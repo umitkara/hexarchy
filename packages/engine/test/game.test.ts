@@ -15,7 +15,11 @@ import {
   type GameState,
   type Resources,
 } from '../src/state';
-import { expectCenterInvariants, expectInvariants } from './fixtures/invariants';
+import {
+  expectCapitalInvariants,
+  expectCenterInvariants,
+  expectInvariants,
+} from './fixtures/invariants';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i * 104729 + 3);
 const games = SEEDS.map((seed) => createGame({ seed }));
@@ -238,14 +242,15 @@ describe('determinism and invariants', () => {
         const before = total(state);
         const { state: next, events } = apply(state, command);
         expectInvariants(next);
-        // Treasuries change only by income (+), destroyed centers, purchases, upkeep and
-        // starvation (−).
+        // Treasuries change only by income (+), destroyed centers, purchases, upkeep,
+        // starvation and age advances (−).
         const expected: Record<keyof Resources, number> = { ...before };
         for (const e of events) {
           for (const kind of RESOURCE_KINDS) {
             if (e.type === 'income') expected[kind] += e.income[kind];
             if (e.type === 'centerRemoved') expected[kind] -= e.lost[kind];
             if (e.type === 'upkeepPaid' && e.resource === kind) expected[kind] -= e.amount;
+            if (e.type === 'ageAdvanceStarted') expected[kind] -= e.cost[kind];
           }
           if (e.type === 'unitBought') expected.gold -= e.cost;
           if (e.type === 'buildingBuilt') expected.materials -= e.cost;
@@ -255,8 +260,8 @@ describe('determinism and invariants', () => {
         expect(total(next)).toEqual(expected);
         state = next;
       }
-      // Capitals are locked in M2, so every player still has one.
-      for (const p of state.players) expect(capitalOf(state, p.id)).toBeDefined();
+      // A capital only falls to conquest, taking its owner out of the game.
+      expectCapitalInvariants(state);
     }
   });
 });

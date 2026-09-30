@@ -6,16 +6,16 @@ import { turnStartForecast, type GameEvent } from '../src/rules';
 import {
   BUILDING_KINDS,
   STRUCTURE_KINDS,
-  capitalOf,
   centerTiles,
   createGame,
+  isGameOver,
   mapGrid,
   unitTiles,
   type Center,
   type GameState,
 } from '../src/state';
 import { parseFixture } from './fixtures/ascii';
-import { expectInvariants } from './fixtures/invariants';
+import { expectCapitalInvariants, expectInvariants } from './fixtures/invariants';
 
 /**
  * Random play: at every step a random legal command of the current player (ending the
@@ -26,7 +26,7 @@ function randomPlay(game: GameState, seed: number, steps: number) {
   const commands: Command[] = [];
   const events: GameEvent[] = [];
   let state = game;
-  for (let i = 0; i < steps; i++) {
+  for (let i = 0; i < steps && !isGameOver(state); i++) {
     const legal = legalCommands(state);
     const command: Command = rng.chance(0.15)
       ? { type: 'endTurn' }
@@ -88,13 +88,14 @@ describe('invariant fuzz', () => {
     for (const seed of [31, 32, 33]) {
       const rng = Rng.fromSeed(seed);
       let state = createGame({ seed });
-      for (let i = 0; i < 300; i++) {
+      for (let i = 0; i < 300 && !isGameOver(state); i++) {
         const legal = legalCommands(state);
         for (const command of legal) expect(validate(state, command)).toEqual({ ok: true });
         const command = rng.chance(0.12) ? legal.at(-1) : rng.pick(legal);
         if (!command) throw new Error('No legal command');
         const { state: next, events } = apply(state, command);
         expectInvariants(next);
+        expectCapitalInvariants(next);
         for (const e of events) {
           if (e.type === 'tileOwnerChanged' && e.from === null) counts.captures++;
           if (e.type === 'unitsMerged') counts.merges++;
@@ -104,8 +105,6 @@ describe('invariant fuzz', () => {
         }
         state = next;
       }
-      // Capitals are locked until M6.
-      for (const p of state.players) expect(capitalOf(state, p.id)).toBeDefined();
     }
     expect(counts.captures).toBeGreaterThan(10);
     expect(counts.merges).toBeGreaterThan(0);
@@ -131,7 +130,7 @@ describe('invariant fuzz', () => {
     for (const seed of [61, 62, 63, 64]) {
       const rng = Rng.fromSeed(seed);
       let state = field;
-      for (let i = 0; i < 300; i++) {
+      for (let i = 0; i < 300 && !isGameOver(state); i++) {
         const legal = legalCommands(state);
         for (const command of legal) expect(validate(state, command)).toEqual({ ok: true });
         // Favour the rarer commands a little so they show up in every run.
@@ -157,12 +156,63 @@ describe('invariant fuzz', () => {
     expect(counts.edgeCaptured).toBeGreaterThan(0);
   });
 
+  it('plays matches to the end: age advances, eliminations and a winner', () => {
+    // Three rich players close together, each with a barracks.
+    const field = parseFixture(
+      `
+      A*  A   Ak  .   Bk  B   B*
+        A   A   .   .   .   B   B
+      .   .   .   .   .   .   .
+        .   .   C   Ck  C   .   .
+      .   .   .   C*  C   .   .
+      `,
+      { treasury: { gold: 120, food: 120, materials: 60 } },
+    ).state;
+    const counts: Partial<Record<GameEvent['type'], number>> = {};
+    for (const seed of [71, 72, 73, 74, 75, 76]) {
+      const rng = Rng.fromSeed(seed);
+      let state = field;
+      for (let i = 0; i < 600 && !isGameOver(state); i++) {
+        const legal = legalCommands(state);
+        for (const command of legal) expect(validate(state, command)).toEqual({ ok: true });
+        // Aggressive random play: take a capital when possible, prefer taking tiles.
+        const takes = legal.filter(
+          (c) =>
+            (c.type === 'moveUnit' || c.type === 'buyUnit') &&
+            state.owners[c.type === 'moveUnit' ? c.to : c.tile] !== state.currentPlayer,
+        );
+        const capitals = takes.filter(
+          (c) => c.type === 'moveUnit' && state.centers[c.to]?.kind === 'capital',
+        );
+        const command =
+          capitals.length > 0
+            ? rng.pick(capitals)
+            : rng.chance(0.1)
+              ? legal.at(-1)
+              : takes.length > 0 && rng.chance(0.4)
+                ? rng.pick(takes)
+                : rng.pick(legal);
+        if (!command) throw new Error('No legal command');
+        const { state: next, events } = apply(state, command);
+        expectInvariants(next);
+        expectCapitalInvariants(next);
+        for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1;
+        state = next;
+      }
+      if (isGameOver(state)) expect(legalCommands(state)).toEqual([]);
+    }
+    expect(counts.ageAdvanceStarted).toBeGreaterThan(0);
+    expect(counts.ageReached).toBeGreaterThan(0);
+    expect(counts.playerEliminated).toBeGreaterThan(1);
+    expect(counts.gameWon).toBeGreaterThan(0);
+  });
+
   it('forecasts every turn start exactly (treasury panel = real turn start)', () => {
     let checked = 0;
     for (const seed of [51, 52]) {
       const rng = Rng.fromSeed(seed);
       let state = createGame({ seed });
-      for (let i = 0; i < 300; i++) {
+      for (let i = 0; i < 300 && !isGameOver(state); i++) {
         const legal = legalCommands(state);
         const command = rng.chance(0.15) ? legal.at(-1) : rng.pick(legal);
         if (!command) throw new Error('No legal command');
@@ -199,8 +249,14 @@ describe('invariant fuzz', () => {
     // At the start (materials for a building or two) and after some random play, also with
     // every line and structure unlocked.
     const feudal = feudalGame(42);
+    // Rich but still in the Dark Age: advancing is allowed.
+    const richDark = {
+      ...feudal,
+      players: feudal.players.map((p) => ({ ...p, age: 'dark' as const })),
+    };
     const states = [
       game,
+      richDark,
       randomPlay(game, 4, 60).state,
       randomPlay(feudal, 5, 80).state,
       randomPlay(feudal, 6, 160).state,
@@ -229,6 +285,8 @@ describe('invariant fuzz', () => {
         const around = [...near, ...grid.neighbors(from).flatMap((n) => grid.neighbors(n))];
         for (const target of around) check({ type: 'archerVolley', from, target });
       }
+      check({ type: 'advanceAge' });
+      check({ type: 'endTurn' });
       for (const center of centerTiles(state)) {
         // Random tiles, plus every tile near the center (where most builds are valid).
         const near = mapGrid(state.map).neighbors(center);

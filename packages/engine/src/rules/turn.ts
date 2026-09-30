@@ -1,15 +1,17 @@
 import type { Draft } from 'immer';
 import { ECONOMY } from '../balance';
 import type { GameState } from '../state/game';
+import { completeAgeAdvance } from './ages';
 import type { GameEvent } from './events';
 import { spreadForest } from './forest';
 import { applyTurnStart } from './turnStart';
 
 /**
- * Ends the current player's turn and starts the next one (GDD 2). The ending player's
- * units are rested and volleys wear off (GDD 7.3). Turn start, from round `ECONOMY.firstIncomeRound` on: income →
- * building upkeep → production → food upkeep, starvation and rebellion (see turnStart),
- * then forest spread.
+ * Ends the current player's turn and starts the next one (GDD 2), skipping eliminated
+ * players (GDD 11). The ending player's units are rested and volleys wear off (GDD 7.3).
+ * Turn start: an age being advanced to arrives (GDD 9.1); then, from round
+ * `ECONOMY.firstIncomeRound` on, income → building upkeep → production → food upkeep,
+ * starvation and rebellion (see turnStart), then forest spread.
  */
 export function endTurn(draft: Draft<GameState>, events: GameEvent[]): void {
   events.push({ type: 'turnEnded', player: draft.currentPlayer });
@@ -19,10 +21,15 @@ export function endTurn(draft: Draft<GameState>, events: GameEvent[]): void {
     unit.exhausted = false;
     unit.suppressed = false;
   }
-  const next = (draft.currentPlayer + 1) % draft.players.length;
-  if (next === 0) draft.round += 1;
+  // The current player is still in (the game is not over), so this stops.
+  let next = draft.currentPlayer;
+  do {
+    next = (next + 1) % draft.players.length;
+    if (next === 0) draft.round += 1;
+  } while (draft.players[next]?.eliminated);
   draft.currentPlayer = next;
   events.push({ type: 'turnStarted', player: next, round: draft.round });
+  completeAgeAdvance(draft, next, events);
   if (draft.round >= ECONOMY.firstIncomeRound) {
     applyTurnStart(draft, next, events);
     spreadForest(draft, next, events);

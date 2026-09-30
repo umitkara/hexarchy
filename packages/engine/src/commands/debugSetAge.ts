@@ -7,7 +7,8 @@ export function validateDebugSetAge(state: GameState, command: DebugSetAgeComman
   const player = state.players[command.player];
   if (player?.id !== command.player) return { ok: false, error: 'unknownPlayer' };
   if (!AGES.includes(command.age)) return { ok: false, error: 'unknownAge' };
-  if (player.age === command.age) return { ok: false, error: 'noChange' };
+  if (player.eliminated) return { ok: false, error: 'eliminated' };
+  if (player.age === command.age && !player.advancing) return { ok: false, error: 'noChange' };
   return { ok: true };
 }
 
@@ -19,5 +20,6 @@ export function applyDebugSetAge(
   const player = draft.players[command.player];
   if (!player) return;
   player.age = command.age;
+  player.advancing = null;
   events.push({ type: 'ageChanged', player: command.player, age: command.age });
 }

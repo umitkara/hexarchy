@@ -1,17 +1,18 @@
 import { edgeKey, edgeTiles, rectangleGrid, type EdgeKey } from '../../src/hex';
 import { createRngState } from '../../src/rng';
-import type {
-  Age,
-  Building,
-  BuildingKind,
-  Center,
-  EdgeStructure,
-  GameState,
-  Player,
-  PlayerId,
-  Resources,
-  Unit,
-  UnitLine,
+import {
+  emptyStats,
+  type Age,
+  type Building,
+  type BuildingKind,
+  type Center,
+  type EdgeStructure,
+  type GameState,
+  type Player,
+  type PlayerId,
+  type Resources,
+  type Unit,
+  type UnitLine,
 } from '../../src/state/game';
 import {
   mapGrid,
@@ -214,10 +215,18 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
   });
 
   const playerCount = options.players ?? Math.max(2, highestOwner + 1);
+  const age = options.age ?? 'dark';
+  const round = options.round ?? 1;
   const players: Player[] = Array.from({ length: playerCount }, (_, id) => ({
     id,
     controller: id === 0 ? 'human' : 'ai',
-    age: options.age ?? 'dark',
+    age,
+    advancing: null,
+    eliminated: null,
+  }));
+  const stats = players.map((p) => ({
+    ...emptyStats(age, round),
+    peakTiles: owners.filter((o) => o === p.id).length,
   }));
   const map: GameMap = { seed: 0, shape: { kind: 'rectangle', width, height }, tiles, edges };
   if (mapGrid(map).tileCount !== grid.tileCount) throw new Error('Fixture grid mismatch');
@@ -225,7 +234,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
   return {
     state: {
       map,
-      round: options.round ?? 1,
+      round,
       currentPlayer: options.currentPlayer ?? 0,
       players,
       owners,
@@ -233,6 +242,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       units,
       buildings,
       edgeStructures: {},
+      stats,
       rng: createRngState(0),
     },
     tile: (col, row) => {

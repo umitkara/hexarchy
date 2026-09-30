@@ -74,8 +74,12 @@ function verdict(game: GameState, source: HandSource, tile: number) {
   const check = checkPlacement(game, source, tile);
   if (check.ok) {
     const { action, unit, defenders, via } = check.placement;
+    const owner = game.owners[tile] ?? null;
     let text =
       action === 'merge' ? `${ACTION_LABELS.merge} → ${unitName(unit)}` : ACTION_LABELS[action];
+    if (action === 'attack' && owner !== null && game.centers[tile]?.kind === 'capital') {
+      text = `Başkenti alır: ${playerName(owner)} elenir`;
+    }
     if (via !== undefined) text += ` (#${via} üzerinden)`;
     const bonus = Math.max(0, ...defenders.map((d) => counterBonus(unit, d)));
     if (bonus > 0) text += ` · karşılık +${bonus}`;
@@ -97,7 +101,10 @@ function structuresText(game: GameState, tile: number): string {
         structure.damage > 0
           ? `, hasar ${structure.damage}/${STRUCTURES[structure.kind].hits}`
           : '';
-      return [`${STRUCTURE_LABELS[structure.kind]} (${playerName(structure.owner)}${damage})`];
+      const ruin = game.players[structure.owner]?.eliminated ? ', harabe' : '';
+      return [
+        `${STRUCTURE_LABELS[structure.kind]} (${playerName(structure.owner)}${ruin}${damage})`,
+      ];
     })
     .join(', ');
 }

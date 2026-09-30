@@ -284,6 +284,8 @@ Hover/sürükleme sırasında hedef karoda **kalkan ikonları**: kim, hangi gü�
 
 **Ödeme:** Çağ atlama (ve araştırmalar `[TASLAK]`) **başkentin bölgesinin kasasından** ödenir. Başkent bölgesini büyük ve bağlı tutmak ödüllendirilir; düşmanı bölmek onun çağını da geciktirir.
 
+**Geçiş (v0.1):** Fiyat anında ödenir; yeni çağ oyuncunun **sonraki turunun başında, gelirden önce** gelir. Geçiş turunda başka kısıt yoktur; kilitler gerçek çağa göre açılır. Başkent geçiş sırasında düşerse geçiş iptal olur. v0.1'de son çağ Feodal'dır.
+
 ### 9.2 Araştırmalar (bina başına 2-3) `[TASLAK]`
 | Bina | Araştırma | Etki |
 |---|---|---|
@@ -317,6 +319,8 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
   - Başka bir **Kalesi** varsa başkent oraya taşınır — ceza: kasa kaybı (%50) + 1 tur **Kargaşa** (asker alınamaz). `[TASLAK]`
   - Kalesi yoksa **elenir**; kalan bölgeleri tarafsızlaşır.
 - Son kalan oyuncu kazanır.
+
+**v0.1 uygulaması:** Kale binası yok, bu yüzden başkent fethi her zaman eleme demektir. Başkent, merkez korumasıyla korunan sıradan bir karo gibi alınır (Karanlık Çağ'da Sv2 gerekir); kasası yok olur. Elenen oyuncunun kalan karoları tarafsızlaşır, birimleri ve merkezleri yok olur; kenar yapıları onun adına **harabe** olarak kalır (engeller, kapıları kimseye açılmaz, köprüleri bağlar, kırılabilir, iki taraf alınınca devralınır). Elenenlerin sırası atlanır. Oyun bitince hiçbir komut kabul edilmez; bitiş ekranı kazananı ve maç istatistiklerini gösterir.
 
 ---
 
@@ -442,3 +446,13 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 | 59 | Hat tavanları (v0.1) | Okçu en fazla Sv3; koçbaşı birleşmez (Sv1) | Hepsi Sv4 |
 | 60 | Süvari/koçbaşı çağı | Feodal (ahır/atölye ile aynı) | Karanlık |
 | 61 | Koçbaşı ve karolar | Birimli karoyu alamaz (işçi dahil); merkez/kuleye tam güç; tarafsız karoyu alabilir | Hiç karo alamaz |
+| 62 | Çağ geçişi | Hemen öde, sonraki kendi turunun başında (gelirden önce) gel; geçişte başka kısıt yok | Tur sonunda gel; geçişte asker alınamaz |
+| 63 | Son çağ (v0.1) | Feodal | Tüm çağlar |
+| 64 | Başkent koruması | Merkez koruması gibi (Karanlık'ta Sv2 gerekir); ayrı kilit yok | Özel güç, kuşatma şartı |
+| 65 | Alınan başkentin kasası | Yok olur | Fatihe geçer, yarısı geçer |
+| 66 | Elenen oyuncunun kenar yapıları | Harabe olarak onun adına kalır (engeller, kapılar kimseye açılmaz, köprü bağlar, kırılabilir, iki taraf alınınca devralınır) | Yok olur, fatihe geçer |
+| 67 | Başkent düşerken çağ geçişi | İptal; ödenen fiyat da gider | Geçiş sürer |
+| 68 | Elenen oyuncunun sırası | Atlanır; tur sayısı ilk oyuncu elenmiş olsa da sıra başa dönünce artar | Boş tur |
+| 69 | Oyun sonu | Tüm komutlar (debug dahil) reddedilir; geri alma kapanır | Oynamaya devam |
+| 70 | Bitiş istatistikleri | Temel tablo (toprak, birim, bina, çağ) her zaman; savaş/ekonomi/en geniş toprak "Detaylar" altında. Olaylardan sayılır, durumda saklanır; debug komutları sayılmaz (en geniş toprak her komutta güncellenir) | Yalnız kazanan; türetilmiş sayaçlar |
+| 71 | AI'a karşı elenme | Oyun insan için biter ("Elendin" ekranı); AI'lar arası devam simüle edilmez | AI'lar sonuca dek oynar |

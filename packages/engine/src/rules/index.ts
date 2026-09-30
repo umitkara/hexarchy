@@ -1,6 +1,8 @@
+export * from './ages';
 export * from './buildings';
 export * from './centers';
 export * from './economy';
+export * from './elimination';
 export * from './edgeState';
 export * from './events';
 export * from './forest';
@@ -8,6 +10,7 @@ export * from './movement';
 export * from './placement';
 export * from './protection';
 export * from './regions';
+export * from './stats';
 export * from './structures';
 export * from './treasuryGraph';
 export * from './turn';

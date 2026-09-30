@@ -92,6 +92,22 @@ export const AGE_LABELS: Readonly<Record<Age, string>> = {
   imperial: 'İmparatorluk Çağı',
 };
 
+/** Age names without "Çağ", for tight spots: "Karanlık", "Feodal". */
+export const AGE_SHORT_LABELS: Readonly<Record<Age, string>> = {
+  dark: 'Karanlık',
+  feudal: 'Feodal',
+  castle: 'Kale',
+  imperial: 'İmparatorluk',
+};
+
+/** Dative of the age names: "Feodal Çağ'a". */
+export const AGE_DATIVE_LABELS: Readonly<Record<Age, string>> = {
+  dark: 'Karanlık Çağ’a',
+  feudal: 'Feodal Çağ’a',
+  castle: 'Kale Çağı’na',
+  imperial: 'İmparatorluk Çağı’na',
+};
+
 export const LINE_LABELS: Readonly<Record<UnitLine, string>> = {
   infantry: 'Piyade',
   archer: 'Okçu',
@@ -145,7 +161,11 @@ export const COMMAND_ERROR_LABELS: Readonly<Record<CommandError, string>> = {
   unknownBuilding: 'Böyle bir bina yok.',
   unknownAge: 'Böyle bir çağ yok.',
   notOwnable: 'Su ve dağ karoları sahiplenilemez.',
-  capitalLocked: 'Başkent alınamaz (başkent fethi M6’da).',
+  capitalLocked: 'Başkent boyanamaz; yalnızca fetihle alınır.',
+  gameOver: 'Oyun bitti.',
+  eliminated: 'Bu oyuncu elendi.',
+  alreadyAdvancing: 'Çağ atlama zaten sürüyor.',
+  lastAge: 'Bu sürümün son çağındasın.',
   noChange: 'Değişiklik yok.',
   noUnit: 'Bu karoda birim yok.',
   notYourUnit: 'Bu birim senin değil.',
@@ -153,6 +173,7 @@ export const COMMAND_ERROR_LABELS: Readonly<Record<CommandError, string>> = {
   noTreasury: 'Bu bölgenin kasası yok.',
   notYourRegion: 'Bu kasa senin değil.',
   notEnoughGold: 'Kasada yeterli altın yok.',
+  notEnoughFood: 'Kasada yeterli yiyecek yok.',
   notEnoughMaterials: 'Kasada yeterli malzeme yok.',
   needsBuilding: 'Bu bölgede bu hattın çalışan binası gerekir.',
   ageLocked: 'Daha sonraki bir çağda açılır.',
@@ -214,7 +235,32 @@ const KILL_REASONS: Readonly<Record<Extract<GameEvent, { type: 'unitKilled' }>['
   {
     captured: 'karosu alındı',
     rebellion: 'açlık isyanı',
+    eliminated: 'sahibi elendi',
   };
+
+const CENTER_REMOVED_REASONS: Readonly<
+  Record<Extract<GameEvent, { type: 'centerRemoved' }>['reason'], string>
+> = {
+  captured: 'ele geçirildi',
+  isolated: 'tek karoda kaldı, kalktı',
+  eliminated: 'sahibi elendi, kalktı',
+};
+
+/** The big news of a command, for a short banner (null = none): age, elimination, victory. */
+export function announceEvent(event: GameEvent): string | null {
+  switch (event.type) {
+    case 'ageAdvanceStarted':
+      return `${playerName(event.player)}: ${AGE_DATIVE_LABELS[event.age]} geçiş başladı, sonraki turunda gelir`;
+    case 'ageReached':
+      return `${playerName(event.player)} ${AGE_DATIVE_LABELS[event.age]} geçti`;
+    case 'playerEliminated':
+      return `${playerName(event.player)} elendi: başkentini ${playerName(event.by)} aldı`;
+    case 'gameWon':
+      return `${playerName(event.player)} kazandı!`;
+    default:
+      return null;
+  }
+}
 
 /** One log line per event (null = not worth a line). */
 export function describeEvent(event: GameEvent): string | null {
@@ -247,7 +293,7 @@ export function describeEvent(event: GameEvent): string | null {
       return `${playerName(event.owner)}: #${event.tile} yeni yerel merkez (boş kasa)`;
     case 'centerRemoved': {
       const what = CENTER_LABELS[event.kind].toLowerCase();
-      const why = event.reason === 'captured' ? 'ele geçirildi' : 'tek karoda kaldı, kalktı';
+      const why = CENTER_REMOVED_REASONS[event.reason];
       return `${playerName(event.owner)}: ${what} #${event.tile} ${why} (${resourcesText(event.lost, '−') || 'boş kasa'})`;
     }
     case 'treasuriesMerged':
@@ -263,7 +309,15 @@ export function describeEvent(event: GameEvent): string | null {
     case 'upkeepPaid':
       return `${playerName(event.player)}: −${event.amount} ${RESOURCE_LABELS[event.resource].toLowerCase()} bakım ← #${event.center}`;
     case 'ageChanged':
-      return `${playerName(event.player)}: ${AGE_LABELS[event.age]}`;
+      return `${playerName(event.player)}: ${AGE_LABELS[event.age]} (debug)`;
+    case 'ageAdvanceStarted':
+      return `${playerName(event.player)}: ${AGE_DATIVE_LABELS[event.age]} geçiş başladı (${resourcesText(event.cost, '−')} ← #${event.center})`;
+    case 'ageReached':
+      return `${playerName(event.player)}: ${AGE_DATIVE_LABELS[event.age]} geçti`;
+    case 'playerEliminated':
+      return `${playerName(event.player)} ELENDİ: başkent #${event.capital} ${playerName(event.by)} eline geçti, kalan toprakları tarafsız`;
+    case 'gameWon':
+      return `${playerName(event.player)} KAZANDI (tur ${event.round})`;
     case 'edgeBuilt': {
       const what = STRUCTURE_LABELS[event.structure];
       const over = event.replaces

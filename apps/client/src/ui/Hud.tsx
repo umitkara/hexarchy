@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { gameStore } from '../store/gameStore';
 import { ActionHint } from './ActionHint';
+import { AgePanel } from './AgePanel';
 import { DebugPanel } from './DebugPanel';
+import { GameOver } from './GameOver';
 import { Notice } from './Notice';
 import { RegionPanel } from './RegionPanel';
 import { TileInfo } from './TileInfo';
@@ -15,7 +17,8 @@ function onKeyDown(event: KeyboardEvent) {
   const state = gameStore.getState();
   if (event.key === 'Escape') {
     if (state.drag) state.endDrag(null);
-    else state.arm(null);
+    else if (state.armed) state.arm(null);
+    else if (state.agePanelOpen) state.setAgePanelOpen(false);
   } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
     event.preventDefault();
     if (!state.drag) state.undo();
@@ -39,6 +42,7 @@ export function Hud() {
         </header>
         <TurnPanel />
         <TileInfo />
+        <AgePanel />
       </div>
       <Notice />
       <div className="hud-bottom">
@@ -48,6 +52,7 @@ export function Hud() {
           <RegionPanel />
         </div>
       </div>
+      <GameOver />
     </div>
   );
 }

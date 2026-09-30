@@ -99,6 +99,7 @@ body {
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px;
+  max-width: 100%;
 }
 
 .hud-label {
@@ -537,11 +538,37 @@ body {
   color: var(--text-dim);
 }
 
-.notice {
+/* Short messages in the middle of the map: news above, refusals below. */
+.notices {
   position: absolute;
-  top: 50%;
+  top: 42%;
   left: 50%;
   translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
+}
+
+.news {
+  padding: 10px 16px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+}
+
+.news p {
+  margin: 0;
+}
+
+.notice {
   padding: 10px 16px;
   font-weight: 600;
   color: var(--text);
@@ -549,6 +576,240 @@ body {
   border: 1px solid rgb(255 255 255 / 0.2);
   border-radius: 10px;
   pointer-events: none;
+}
+
+.age-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  position: relative;
+  min-height: 44px;
+  padding: 2px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.age-chip:hover,
+.age-chip[aria-expanded='true'] {
+  background: rgb(255 255 255 / 0.16);
+}
+
+.age-chip:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.age-short {
+  display: none;
+}
+
+.age-chip-next {
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.age-chip-ready {
+  border-color: var(--accent);
+}
+
+.age-chip-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.age-panel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 360px;
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+}
+
+.age-status {
+  margin: 0;
+  padding: 6px 10px;
+  font-weight: 600;
+  background: rgb(217 164 65 / 0.18);
+  border: 1px solid rgb(217 164 65 / 0.5);
+  border-radius: 6px;
+}
+
+.age-cost dd {
+  font-size: 1.2rem;
+}
+
+.age-cost .age-short {
+  color: #f09a8a;
+}
+
+.age-unlocks-title {
+  margin: 4px 0 0;
+}
+
+.age-unlocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.age-unlocks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.age-unlocks .age-unlock-cap {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+/* End screen: a modal over the map (catches the pointer, unlike the rest of the HUD). */
+.game-over-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  /* A bounded column: wide tables scroll inside the dialog instead of widening it. */
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgb(8 12 18 / 0.55);
+  pointer-events: auto;
+}
+
+.game-over {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 560px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 18px 20px;
+  overflow-y: auto;
+  background: rgb(20 27 36 / 0.95);
+}
+
+.game-over-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.game-over-header .swatch {
+  width: 20px;
+  height: 20px;
+}
+
+.game-over-title {
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--accent);
+}
+
+.game-over-subtitle {
+  margin: 0;
+  text-align: center;
+}
+
+.results {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.results th,
+.results td {
+  padding: 6px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.results thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.results th:first-child,
+.results tbody th {
+  text-align: left;
+}
+
+.results tbody th {
+  font-weight: 600;
+}
+
+.results-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.results-details thead th {
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.results-details {
+  width: max-content;
+  min-width: 100%;
+}
+
+.results-details td {
+  white-space: nowrap;
+}
+
+.results-status {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.results-out .results-player {
+  opacity: 0.75;
+}
+
+.results-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.results-details tbody th {
+  font-weight: 400;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.game-over-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 600px) {
@@ -581,6 +842,53 @@ body {
   .tile-info {
     flex: 1 1 100%;
     justify-content: space-between;
+  }
+
+  .turn-panel {
+    gap: 8px;
+  }
+
+  .age-chip {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+  }
+
+  /* Phones: the age chip and the turn panel keep to one line. */
+  .age-long,
+  .turn-info .hud-meta {
+    display: none;
+  }
+
+  .age-short {
+    display: inline;
+  }
+
+  .age-panel {
+    width: 100%;
+    max-height: 50dvh;
+  }
+
+  .game-over {
+    padding: 14px 12px;
+  }
+
+  .results th,
+  .results td {
+    padding: 5px 4px;
+    font-size: 0.85rem;
+  }
+
+  .game-over-actions .hud-button {
+    flex: 1;
+  }
+
+  /* Phones: the details columns are told apart by the color dot alone (name in the title). */
+  .results-details .results-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   .turn-panel .hud-button {

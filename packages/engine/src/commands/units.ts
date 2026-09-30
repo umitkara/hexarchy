@@ -1,6 +1,6 @@
 import type { Draft } from 'immer';
 import { UNITS } from '../balance';
-import { changeOwners } from '../rules/centers';
+import { takeTile } from '../rules/elimination';
 import type { GameEvent } from '../rules/events';
 import { checkPlacement, type Placement, type UnitSource } from '../rules/placement';
 import { removeUnit } from '../rules/upkeep';
@@ -72,13 +72,14 @@ function placementOf(state: GameState, source: UnitSource, tile: number): Placem
   return check.placement;
 }
 
-/** Puts the unit on its target; capturing and attacking change the owner first. */
+/**
+ * Puts the unit on its target; capturing and attacking change the owner first (taking a
+ * capital eliminates its owner).
+ */
 function place(draft: Draft<GameState>, placement: Placement, events: GameEvent[]): void {
   const player = draft.currentPlayer;
   const { action, tile, unit } = placement;
-  if (action === 'capture' || action === 'attack') {
-    changeOwners(draft, [{ tile, owner: player }], events);
-  }
+  if (action === 'capture' || action === 'attack') takeTile(draft, tile, events);
   draft.units[tile] = { ...unit };
   if (action === 'merge') events.push({ type: 'unitsMerged', player, tile, unit: { ...unit } });
 }

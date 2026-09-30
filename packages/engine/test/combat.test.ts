@@ -107,9 +107,12 @@ describe('attack (GDD 7.1)', () => {
     expect(eventsOf(events, 'centerRemoved')[0]?.lost.gold).toBe(9);
   });
 
-  it('cannot take a capital before M6', () => {
-    const f = parseFixture('A*  A4  B*  B', { age: 'imperial' });
-    expect(refusal(f.state, move(f.tile(1, 0), f.tile(2, 0)))).toBe('capitalLocked');
+  it('takes a capital only past its center protection (GDD 11)', () => {
+    const weak = parseFixture('A*  A1  B*  B');
+    expect(refusal(weak.state, move(weak.tile(1, 0), weak.tile(2, 0)))).toBe('protected');
+    const f = parseFixture('A*  A2  B*  B');
+    const { state } = run(f.state, move(f.tile(1, 0), f.tile(2, 0)));
+    expect(renderFixture(state)).toBe('A*  A   A2  .');
   });
 
   it('never crosses a river, even against an empty tile', () => {

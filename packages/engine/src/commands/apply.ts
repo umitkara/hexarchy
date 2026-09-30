@@ -1,7 +1,9 @@
 import { produce } from 'immer';
 import type { GameEvent } from '../rules/events';
+import { recordStats } from '../rules/stats';
 import { endTurn } from '../rules/turn';
-import type { GameState } from '../state/game';
+import { isGameOver, type GameState } from '../state/game';
+import { applyAdvanceAge, validateAdvanceAge } from './ages';
 import { applyBuild, validateBuild } from './build';
 import { applyDebugPaint, validateDebugPaint } from './debugPaint';
 import { applyDebugSetAge, validateDebugSetAge } from './debugSetAge';
@@ -20,6 +22,8 @@ const OK: Validation = { ok: true };
 
 /** Checks a command against the rules without changing anything. */
 export function validate(state: GameState, command: Command): Validation {
+  // The game is over once a player has won (GDD 11); debug commands included.
+  if (isGameOver(state)) return { ok: false, error: 'gameOver' };
   switch (command.type) {
     case 'endTurn':
       return OK;
@@ -35,11 +39,18 @@ export function validate(state: GameState, command: Command): Validation {
       return validateBreachEdge(state, command);
     case 'archerVolley':
       return validateArcherVolley(state, command);
+    case 'advanceAge':
+      return validateAdvanceAge(state);
     case 'debugPaint':
       return validateDebugPaint(state, command);
     case 'debugSetAge':
       return validateDebugSetAge(state, command);
   }
+}
+
+/** Debug commands bypass the rules and are left out of the match statistics' counters. */
+export function isDebugCommand(command: Command): boolean {
+  return command.type === 'debugPaint' || command.type === 'debugSetAge';
 }
 
 export class InvalidCommandError extends Error {
@@ -83,6 +94,9 @@ export function apply(state: GameState, command: Command): CommandResult {
       case 'archerVolley':
         applyArcherVolley(state, draft, command, events);
         break;
+      case 'advanceAge':
+        applyAdvanceAge(state, draft, events);
+        break;
       case 'debugPaint':
         applyDebugPaint(draft, command, events);
         break;
@@ -90,6 +104,8 @@ export function apply(state: GameState, command: Command): CommandResult {
         applyDebugSetAge(draft, command, events);
         break;
     }
+    // Debug commands count toward nothing but the peak territory.
+    recordStats(draft, isDebugCommand(command) ? [] : events);
   });
   return { state: next, events };
 }

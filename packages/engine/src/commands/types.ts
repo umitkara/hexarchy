@@ -20,6 +20,7 @@ export type Command =
   | BuildEdgeCommand
   | BreachEdgeCommand
   | ArcherVolleyCommand
+  | AdvanceAgeCommand
   | DebugPaintCommand
   | DebugSetAgeCommand;
 
@@ -85,6 +86,14 @@ export interface ArcherVolleyCommand {
   readonly target: number;
 }
 
+/**
+ * Starts advancing the current player to the next age, paid from the capital region's
+ * treasury; the age arrives at their next turn start (GDD 9.1).
+ */
+export interface AdvanceAgeCommand {
+  readonly type: 'advanceAge';
+}
+
 /** Debug: sets a tile's owner (null = neutral), triggering splits and merges. */
 export interface DebugPaintCommand {
   readonly type: 'debugPaint';
@@ -92,7 +101,7 @@ export interface DebugPaintCommand {
   readonly owner: PlayerId | null;
 }
 
-/** Debug: sets a player's age (level lock tests until advancing arrives in M6). */
+/** Debug: sets a player's age at once (cancels an advance in progress). */
 export interface DebugSetAgeCommand {
   readonly type: 'debugSetAge';
   readonly player: PlayerId;
@@ -114,8 +123,16 @@ export type CommandError =
   | 'unknownAge'
   /** Water and mountains cannot be owned. */
   | 'notOwnable'
-  /** Capitals cannot change hands until capital conquest (M6). */
+  /** Debug paint does not touch capitals (only conquest takes them). */
   | 'capitalLocked'
+  /** The game is over: a player has won. */
+  | 'gameOver'
+  /** The player has been eliminated. */
+  | 'eliminated'
+  /** The player is already advancing to the next age. */
+  | 'alreadyAdvancing'
+  /** There is no later age to advance to (v0.1 ends at Feudal). */
+  | 'lastAge'
   /** The command would not change anything. */
   | 'noChange'
   /** No unit on the tile. */
@@ -129,6 +146,7 @@ export type CommandError =
   /** The treasury belongs to another player. */
   | 'notYourRegion'
   | 'notEnoughGold'
+  | 'notEnoughFood'
   | 'notEnoughMaterials'
   /** The line needs an active building in the paying region (infantry: barracks). */
   | 'needsBuilding'

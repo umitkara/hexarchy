@@ -175,12 +175,14 @@ export function checkTarget(
   };
 }
 
-/** Whether `unit` could take `tile` if it got there: terrain, capital, protection. */
+/**
+ * Whether `unit` could take `tile` if it got there: terrain, protection. A capital is
+ * taken like any tile (its center protects it); that eliminates its owner (GDD 11).
+ */
 function checkTakeable(state: RulesState, unit: Unit, tile: number): PlacementCheck | { ok: true } {
   const terrain = state.map.tiles[tile]?.terrain;
   if (terrain === undefined || !isOwnable(terrain)) return { ok: false, error: 'notOwnable' };
   if (!UNITS[unit.line].fights) return { ok: false, error: 'cannotCapture' };
-  if (state.centers[tile]?.kind === 'capital') return { ok: false, error: 'capitalLocked' };
   const there = state.units[tile];
   const owner = state.owners[tile] ?? null;
   if (UNITS[unit.line].siege && there && owner !== null) {
