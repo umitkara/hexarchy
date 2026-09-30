@@ -46,7 +46,7 @@ apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), sürükle-bırak
   src/ui/          React HUD (canvas üstünde overlay)
-  src/store/       oyun durumu köprüsü (zustand, M2+)
+  src/store/       oyun durumu köprüsü (zustand; M1: harita + hover)
 ```
 
 ## Mimari sınır kuralı (ihlal edilemez)

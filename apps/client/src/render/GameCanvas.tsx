@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { useEffect, useRef } from 'react';
+import { BACKGROUND_COLOR } from './palette';
 import { createScene } from './scene';
 
 /** Full-screen Pixi canvas. Pixi is driven imperatively; React only owns the host element. */
@@ -18,7 +19,7 @@ export function GameCanvas() {
     void app
       .init({
         resizeTo: host,
-        background: '#1b2430',
+        background: BACKGROUND_COLOR,
         antialias: true,
         autoDensity: true,
         resolution: window.devicePixelRatio,

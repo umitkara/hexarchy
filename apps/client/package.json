@@ -13,7 +13,8 @@
     "@hexarchy/engine": "workspace:*",
     "pixi.js": "^8.21.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

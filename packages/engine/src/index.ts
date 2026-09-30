@@ -1,5 +1,5 @@
 export const ENGINE_NAME = 'hexarchy-engine';
-export const ENGINE_VERSION = '0.0.0';
+export const ENGINE_VERSION = '0.1.0';
 
 export interface EngineInfo {
   readonly name: string;
@@ -9,3 +9,9 @@ export interface EngineInfo {
 export function getEngineInfo(): EngineInfo {
   return { name: ENGINE_NAME, version: ENGINE_VERSION };
 }
+
+export * from './balance';
+export * from './hex';
+export * from './map';
+export * from './rng';
+export * from './state';
