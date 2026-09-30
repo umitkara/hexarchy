@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+pnpm-lock.yaml
+
+# Hand-formatted design docs (wide Turkish tables)
+/GDD.md
+/PLAN.md

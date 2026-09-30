@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // ES only: no DOM, no Node. The engine must run anywhere (browser, worker, server).
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src", "test"]
+}
