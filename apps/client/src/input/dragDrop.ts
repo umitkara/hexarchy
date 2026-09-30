@@ -1,11 +1,12 @@
-import type { Point, UnitSource } from '@hexarchy/engine';
+import type { Point } from '@hexarchy/engine';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { gameStore } from '../store/gameStore';
+import { gameStore, sameSource, type HandSource } from '../store/gameStore';
 
 /**
  * Drag and drop from the HUD onto the map (GDD 13: recruit by dragging from the panel,
- * like Konkr). The scene registers how screen points map to canvas points and tiles.
- * A press that does not move far is a click: it arms the unit for tap-to-place instead.
+ * like Konkr; buildings the same way). The scene registers how screen points map to canvas points and tiles.
+ * A press that does not move far is a click: it arms the source for tap-to-place instead
+ * (a second click on the same button disarms it).
  */
 
 export interface MapPicker {
@@ -28,7 +29,7 @@ export function registerMapPicker(next: MapPicker): () => void {
 const DRAG_THRESHOLD = 8;
 
 /** Starts a drag (or, without movement, a click) from a HUD button. */
-export function startPanelDrag(event: ReactPointerEvent<HTMLElement>, source: UnitSource): void {
+export function startPanelDrag(event: ReactPointerEvent<HTMLElement>, source: HandSource): void {
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   event.preventDefault();
   const pointerId = event.pointerId;
@@ -58,15 +59,7 @@ export function startPanelDrag(event: ReactPointerEvent<HTMLElement>, source: Un
     window.removeEventListener('pointercancel', finish);
     const store = gameStore.getState();
     if (!dragging) {
-      if (e.type === 'pointerup') {
-        const armed = store.armed;
-        const same =
-          armed?.kind === 'recruit' &&
-          source.kind === 'recruit' &&
-          armed.line === source.line &&
-          armed.center === source.center;
-        store.arm(same ? null : source);
-      }
+      if (e.type === 'pointerup') store.arm(sameSource(store.armed, source) ? null : source);
       return;
     }
     store.endDrag(e.type === 'pointerup' ? locate(e).tile : null);

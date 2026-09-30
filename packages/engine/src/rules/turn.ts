@@ -1,15 +1,15 @@
 import type { Draft } from 'immer';
 import { ECONOMY } from '../balance';
 import type { GameState } from '../state/game';
-import { collectIncome } from './economy';
 import type { GameEvent } from './events';
-import { payUpkeep } from './upkeep';
+import { spreadForest } from './forest';
+import { applyTurnStart } from './turnStart';
 
 /**
  * Ends the current player's turn and starts the next one (GDD 2). The ending player's
- * units are rested. Turn start, from round `ECONOMY.firstIncomeRound` on: income, then
- * unit upkeep (bankrupt regions lose their units). Starvation and forest spread follow
- * in M4.
+ * units are rested. Turn start, from round `ECONOMY.firstIncomeRound` on: income →
+ * building upkeep → production → food upkeep, starvation and rebellion (see turnStart),
+ * then forest spread.
  */
 export function endTurn(draft: Draft<GameState>, events: GameEvent[]): void {
   events.push({ type: 'turnEnded', player: draft.currentPlayer });
@@ -20,7 +20,7 @@ export function endTurn(draft: Draft<GameState>, events: GameEvent[]): void {
   draft.currentPlayer = next;
   events.push({ type: 'turnStarted', player: next, round: draft.round });
   if (draft.round >= ECONOMY.firstIncomeRound) {
-    collectIncome(draft, next, events);
-    payUpkeep(draft, next, events);
+    applyTurnStart(draft, next, events);
+    spreadForest(draft, next, events);
   }
 }

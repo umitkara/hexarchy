@@ -2,6 +2,7 @@ import { UNITS } from '../balance';
 import type { CommandError } from '../commands/types';
 import type { GameState, PlayerId, Unit, UnitLine } from '../state/game';
 import { isOwnable, mapGrid } from '../state/map';
+import { hasActiveBuilding } from './buildings';
 import { movementArea, movementLinked, tilesAround } from './movement';
 import { attackBlockers, protectorsOf, type Protector } from './protection';
 import { getRegions, regionAt } from './regions';
@@ -13,7 +14,8 @@ import { levelCap, mergeUnits, newUnit } from './units';
  *
  * - A unit on the map moves freely within its movement area (see movementArea), and
  *   bought units are placed anywhere in the paying region: onto an empty tile, or onto an
- *   own unit to merge (GDD 6.2).
+ *   own unit to merge (GDD 6.2). A line may need an active building in the paying region
+ *   (infantry: barracks, GDD 4.2). Buildings do not block units.
  * - Either can also take one step outside, through the movement graph: onto a neutral
  *   tile (capture) or an enemy tile (attack), if no protector of the tile is as strong.
  */
@@ -60,7 +62,7 @@ export type SourceCheck =
 
 type RulesState = Pick<
   GameState,
-  'map' | 'owners' | 'centers' | 'units' | 'players' | 'currentPlayer'
+  'map' | 'owners' | 'centers' | 'units' | 'buildings' | 'players' | 'currentPlayer'
 >;
 
 /** Checks that the current player may use the source right now. */
@@ -86,9 +88,12 @@ export function checkSource(state: RulesState, source: UnitSource): SourceCheck 
   const center = state.centers[source.center];
   if (!center) return { ok: false, error: 'noTreasury' };
   if (state.owners[source.center] !== player) return { ok: false, error: 'notYourRegion' };
-  const { cost } = UNITS[source.line];
-  if (center.treasury.gold < cost) return { ok: false, error: 'notEnoughGold' };
+  const { cost, requires } = UNITS[source.line];
   const region = regionAt(getRegions(state), source.center);
+  if (requires && !hasActiveBuilding(state, region?.tiles ?? [], requires)) {
+    return { ok: false, error: 'needsBuilding' };
+  }
+  if (center.treasury.gold < cost) return { ok: false, error: 'notEnoughGold' };
   return {
     ok: true,
     info: { player, unit: newUnit(source.line), area: new Set(region?.tiles), cost },

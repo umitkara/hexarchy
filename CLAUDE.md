@@ -42,6 +42,10 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
   src/state/game.ts   GameState (düz JSON); src/state/setup.ts createGame
   src/rules/       saf kural fonksiyonları (bölgeler, merkezler, ekonomi, tur, hareket, koruma,
                    yerleştirme = checkPlacement/targetOptions, bakım); draft üzerinde
+                   buildings.ts checkBuild/buildOptions/buildingOutput (bina kuralları + üretim)
+                   turnStart.ts turnStartForecast = tur başı ekonomisi (gelir → bakım → açlık);
+                   applyTurnStart aynı tahmini uygular (kasa paneli tahmini = gerçek)
+                   forest.ts orman yayılması (rng.ts ile)
   src/commands/    Command birliği + validate/apply (Immer) → {state, events};
                    history.ts tur içi geri al, legal.ts legalCommands (AI/fuzz için)
   src/balance.ts   TÜM denge sayıları burada
@@ -52,8 +56,9 @@ apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), kamera; dragDrop.ts panelden haritaya sürükleme
   src/ui/          React HUD (canvas üstünde overlay)
-  src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim, sürükleme,
-                   hotseat); komutlar `dispatch` ile
+  src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina =
+                   HandSource, sürükleme, hotseat); komutlar `dispatch` ile
+                   render/tileLayout.ts: merkez + bina + birim aynı karodaysa ikon yerleri
 ```
 
 ## Mimari sınır kuralı (ihlal edilemez)

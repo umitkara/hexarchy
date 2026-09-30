@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
-import { MAX_UNIT_LEVEL } from '../../src/balance';
+import { BUILDINGS, MAX_UNIT_LEVEL } from '../../src/balance';
 import { computeRegions } from '../../src/rules/regions';
-import { centerTiles, unitTiles, type GameState } from '../../src/state/game';
+import { buildingTiles, centerTiles, unitTiles, type GameState } from '../../src/state/game';
 import { isOwnable } from '../../src/state/map';
 
 /** Asserts the center invariants of GDD 4.2 (see `GameState.centers`). */
@@ -47,8 +47,35 @@ export function expectUnitInvariants(state: GameState): void {
   }
 }
 
+/** Asserts the building invariants (see `GameState.buildings`, GDD 5). */
+export function expectBuildingInvariants(state: GameState): void {
+  for (const tile of buildingTiles(state)) {
+    const building = state.buildings[tile];
+    expect(state.owners[tile], `building on ${tile} must stand on an owned tile`).not.toBeNull();
+    if (!building) continue;
+    const land = state.map.tiles[tile];
+    const spec = BUILDINGS[building.kind];
+    expect(spec.terrain as readonly string[], `building on ${tile}`).toContain(land?.terrain);
+    if (spec.vein) expect(land?.vein).toBe(true);
+    // Upkeep-free buildings never idle.
+    if (spec.upkeep === 0) expect(building.idle).toBe(false);
+  }
+}
+
+/** Treasuries never go negative. */
+export function expectTreasuryInvariants(state: GameState): void {
+  for (const tile of centerTiles(state)) {
+    const treasury = state.centers[tile]?.treasury;
+    expect(treasury?.gold, `gold of ${tile}`).toBeGreaterThanOrEqual(0);
+    expect(treasury?.food, `food of ${tile}`).toBeGreaterThanOrEqual(0);
+    expect(treasury?.materials, `materials of ${tile}`).toBeGreaterThanOrEqual(0);
+  }
+}
+
 /** All state invariants at once. */
 export function expectInvariants(state: GameState): void {
   expectCenterInvariants(state);
   expectUnitInvariants(state);
+  expectBuildingInvariants(state);
+  expectTreasuryInvariants(state);
 }

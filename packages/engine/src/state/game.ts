@@ -17,6 +17,11 @@ export type Age = 'dark' | 'feudal' | 'castle' | 'imperial';
 
 export const AGES: readonly Age[] = ['dark', 'feudal', 'castle', 'imperial'];
 
+/** True if `age` is `required` or later. */
+export function ageAtLeast(age: Age, required: Age): boolean {
+  return AGES.indexOf(age) >= AGES.indexOf(required);
+}
+
 export interface Player {
   readonly id: PlayerId;
   readonly controller: Controller;
@@ -42,6 +47,11 @@ export function emptyResources(): Resources {
 
 export function addResources(a: Resources, b: Resources): Resources {
   return { gold: a.gold + b.gold, food: a.food + b.food, materials: a.materials + b.materials };
+}
+
+/** `amount` of one resource, nothing of the others. */
+export function resourceAmount(kind: keyof Resources, amount: number): Resources {
+  return { ...emptyResources(), [kind]: amount };
 }
 
 /**
@@ -73,6 +83,49 @@ export interface Unit {
    * owner's next turn. Moving within its own territory does not exhaust a unit.
    */
   readonly exhausted: boolean;
+  /**
+   * Starving (GDD 4.5): its region could not pay the food upkeep at its owner's last turn
+   * start. Fights at −1 strength; if the region is short again next time, it may rebel.
+   */
+  readonly hungry: boolean;
+}
+
+/** Buildings (GDD 5.1, 5.2); centers are separate (see Center). */
+export type BuildingKind =
+  | 'farm'
+  | 'lumberCamp'
+  | 'quarry'
+  | 'goldMine'
+  | 'barracks'
+  | 'archeryRange'
+  | 'stable'
+  | 'workshop'
+  | 'tower';
+
+export const BUILDING_KINDS: readonly BuildingKind[] = [
+  'farm',
+  'lumberCamp',
+  'quarry',
+  'goldMine',
+  'barracks',
+  'archeryRange',
+  'stable',
+  'workshop',
+  'tower',
+];
+
+/**
+ * A building stands on a tile; its owner is the owner of that tile, so a captured building
+ * changes hands with its tile. At most one building per tile; it may share the tile with a
+ * unit, and with a center founded there later (buildings are never built on centers).
+ */
+export interface Building {
+  readonly kind: BuildingKind;
+  /**
+   * Its gold upkeep was not paid at its owner's last turn start (GDD 4.5): until the next
+   * one it produces nothing, unlocks no units and protects nothing.
+   */
+  readonly idle: boolean;
 }
 
 export interface GameState {
@@ -91,6 +144,8 @@ export interface GameState {
   readonly centers: Readonly<Partial<Record<number, Center>>>;
   /** Units by tile index. Invariant: units only stand on owned tiles. */
   readonly units: Readonly<Partial<Record<number, Unit>>>;
+  /** Buildings by tile index. Invariant: buildings only stand on owned tiles. */
+  readonly buildings: Readonly<Partial<Record<number, Building>>>;
   /** State of the seeded RNG for in-game randomness. */
   readonly rng: RngState;
 }
@@ -105,6 +160,13 @@ export function centerTiles(state: Pick<GameState, 'centers'>): number[] {
 /** Tiles that hold a unit, ascending. */
 export function unitTiles(state: Pick<GameState, 'units'>): number[] {
   return Object.keys(state.units)
+    .map(Number)
+    .sort((a, b) => a - b);
+}
+
+/** Tiles that hold a building, ascending. */
+export function buildingTiles(state: Pick<GameState, 'buildings'>): number[] {
+  return Object.keys(state.buildings)
     .map(Number)
     .sort((a, b) => a - b);
 }

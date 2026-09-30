@@ -16,7 +16,7 @@ function endTurns(state: GameState, count: number) {
 }
 
 const incomes = (events: readonly GameEvent[]) =>
-  events.flatMap((e) => (e.type === 'income' ? [[e.player, e.center, e.gold]] : []));
+  events.flatMap((e) => (e.type === 'income' ? [[e.player, e.center, e.income.gold]] : []));
 
 describe('turn cycle', () => {
   const f = parseFixture(

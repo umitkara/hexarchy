@@ -2,6 +2,7 @@ import { produce } from 'immer';
 import type { GameEvent } from '../rules/events';
 import { endTurn } from '../rules/turn';
 import type { GameState } from '../state/game';
+import { applyBuild, validateBuild } from './build';
 import { applyDebugPaint, validateDebugPaint } from './debugPaint';
 import { applyDebugSetAge, validateDebugSetAge } from './debugSetAge';
 import type { Command, CommandResult, Validation } from './types';
@@ -18,6 +19,8 @@ export function validate(state: GameState, command: Command): Validation {
       return validateBuyUnit(state, command);
     case 'moveUnit':
       return validateMoveUnit(state, command);
+    case 'build':
+      return validateBuild(state, command);
     case 'debugPaint':
       return validateDebugPaint(state, command);
     case 'debugSetAge':
@@ -53,6 +56,9 @@ export function apply(state: GameState, command: Command): CommandResult {
         break;
       case 'moveUnit':
         applyMoveUnit(state, draft, command, events);
+        break;
+      case 'build':
+        applyBuild(draft, command, events);
         break;
       case 'debugPaint':
         applyDebugPaint(draft, command, events);

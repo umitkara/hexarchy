@@ -310,6 +310,25 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.treasury .treasury-forecast {
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.forecast-after {
+  color: var(--text-dim);
+}
+
+.region-warning {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(150 40 30 / 0.85);
+  border-radius: 6px;
+}
+
 .income,
 .upkeep {
   font-size: 0.8rem;
@@ -357,6 +376,18 @@ body {
   gap: 8px;
 }
 
+.build {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.build .recruit-button {
+  min-height: 44px;
+  padding: 2px 8px;
+  gap: 6px;
+}
+
 /* Recruit buttons are dragged onto the map: no browser panning or scrolling on them. */
 .recruit-button {
   display: inline-flex;
@@ -396,17 +427,37 @@ body {
 
 .recruit-cost {
   font-weight: 700;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
 
-.recruit-cost::after {
+.cost-gold::after {
   content: ' ⛁';
   font-size: 0.8em;
 }
 
-.unit-icon {
+.cost-materials {
+  color: #d9b48a;
+}
+
+.cost-materials::after {
+  content: ' ▣';
+  font-size: 0.8em;
+}
+
+.unit-icon,
+.building-icon {
   flex: none;
+}
+
+.tile-hungry {
+  padding: 1px 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #3a1d02;
+  background: #f08a1c;
+  border-radius: 999px;
 }
 
 .tile-unit {
@@ -550,5 +601,20 @@ body {
 
   .recruit-button {
     min-height: 48px;
+  }
+
+  .build {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .build .recruit-button {
+    flex-direction: column;
+    gap: 0;
+    padding: 4px;
+    font-size: 0.8rem;
+  }
+
+  .build .recruit-label {
+    text-align: center;
   }
 }

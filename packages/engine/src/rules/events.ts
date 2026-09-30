@@ -1,4 +1,12 @@
-import type { Age, CenterKind, PlayerId, Resources, Unit, UnitLine } from '../state/game';
+import type {
+  Age,
+  BuildingKind,
+  CenterKind,
+  PlayerId,
+  Resources,
+  Unit,
+  UnitLine,
+} from '../state/game';
 
 /**
  * What happened while applying a command, in order. The client animates and reports
@@ -7,12 +15,32 @@ import type { Age, CenterKind, PlayerId, Resources, Unit, UnitLine } from '../st
 export type GameEvent =
   | { readonly type: 'turnEnded'; readonly player: PlayerId }
   | { readonly type: 'turnStarted'; readonly player: PlayerId; readonly round: number }
-  /** Turn-start income paid into a region's treasury. */
+  /**
+   * Turn-start income paid into a region's treasury: tile gold plus the output of its
+   * working buildings (GDD 3.1, 4.3).
+   */
   | {
       readonly type: 'income';
       readonly player: PlayerId;
       readonly center: number;
-      readonly gold: number;
+      readonly income: Resources;
+    }
+  /** Turn-start gold upkeep of a region's buildings (GDD 4.4). */
+  | {
+      readonly type: 'buildingUpkeepPaid';
+      readonly player: PlayerId;
+      readonly center: number;
+      readonly amount: number;
+    }
+  /**
+   * Gold shortfall (GDD 4.5): these buildings' upkeep could not be paid, so they idle until
+   * the next turn start. `center` is null for a region without a treasury.
+   */
+  | {
+      readonly type: 'buildingsIdle';
+      readonly player: PlayerId;
+      readonly center: number | null;
+      readonly tiles: readonly number[];
     }
   | {
       readonly type: 'tileOwnerChanged';
@@ -64,16 +92,13 @@ export type GameEvent =
       readonly tile: number;
       readonly unit: Unit;
     }
-  /**
-   * A unit died: its tile was taken (`captured`), its region could not pay the upkeep
-   * (`bankrupt`), or it stood in a region without a treasury (`noTreasury`).
-   */
+  /** A unit died: its tile was taken (`captured`) or it starved into rebellion. */
   | {
       readonly type: 'unitKilled';
       readonly tile: number;
       readonly owner: PlayerId;
       readonly unit: Unit;
-      readonly reason: 'captured' | 'bankrupt' | 'noTreasury';
+      readonly reason: 'captured' | 'rebellion';
     }
   /** Turn-start unit upkeep paid from a region's treasury. */
   | {
@@ -84,17 +109,54 @@ export type GameEvent =
       readonly amount: number;
     }
   /**
-   * A region could not pay its upkeep: its treasury (`lost`) dropped to 0 and all its
-   * units die (the `unitKilled` events follow).
+   * Food shortfall (GDD 4.5): the region could not feed its units. Its food (`lost`) drops
+   * to 0 and the units on `tiles` go hungry. `center` is null without a treasury.
    */
   | {
-      readonly type: 'bankrupt';
+      readonly type: 'starvation';
       readonly player: PlayerId;
-      readonly center: number;
-      readonly resource: keyof Resources;
+      readonly center: number | null;
       readonly owed: number;
       readonly lost: number;
+      readonly tiles: readonly number[];
     }
+  /**
+   * Food shortfall while already hungry (GDD 4.5): the units on `tiles` rebel and die,
+   * highest upkeep first, until the rest can be fed (`unitKilled` events follow).
+   */
+  | {
+      readonly type: 'rebellion';
+      readonly player: PlayerId;
+      readonly center: number | null;
+      readonly owed: number;
+      readonly tiles: readonly number[];
+    }
+  /** A building was bought with materials from a region's treasury. */
+  | {
+      readonly type: 'buildingBuilt';
+      readonly player: PlayerId;
+      readonly center: number;
+      readonly tile: number;
+      readonly building: BuildingKind;
+      readonly cost: number;
+    }
+  /** A building changed hands with its tile. */
+  | {
+      readonly type: 'buildingCaptured';
+      readonly tile: number;
+      readonly building: BuildingKind;
+      readonly from: PlayerId;
+      readonly to: PlayerId;
+    }
+  /** A building was lost because its tile became neutral. */
+  | {
+      readonly type: 'buildingDestroyed';
+      readonly tile: number;
+      readonly building: BuildingKind;
+      readonly owner: PlayerId;
+    }
+  /** Forest spread onto these plains tiles of `player` at their turn start (GDD 4.6). */
+  | { readonly type: 'forestSpread'; readonly player: PlayerId; readonly tiles: readonly number[] }
   | { readonly type: 'ageChanged'; readonly player: PlayerId; readonly age: Age };
 
 export type GameEventType = GameEvent['type'];

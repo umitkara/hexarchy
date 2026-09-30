@@ -1,12 +1,17 @@
 import type { GameEvent } from '../rules/events';
-import type { Age, GameState, PlayerId, UnitLine } from '../state/game';
+import type { Age, BuildingKind, GameState, PlayerId, UnitLine } from '../state/game';
 
 /**
  * Commands are the only way to change the game state. They are issued by the current
  * player (UI or AI alike); debug commands bypass the rules and exist for testing.
  */
 export type Command =
-  EndTurnCommand | BuyUnitCommand | MoveUnitCommand | DebugPaintCommand | DebugSetAgeCommand;
+  | EndTurnCommand
+  | BuyUnitCommand
+  | MoveUnitCommand
+  | BuildCommand
+  | DebugPaintCommand
+  | DebugSetAgeCommand;
 
 /** Ends the current player's turn (GDD 2). */
 export interface EndTurnCommand {
@@ -31,6 +36,17 @@ export interface MoveUnitCommand {
   readonly to: number;
 }
 
+/**
+ * Builds a building on `tile`, paid in materials from the treasury of the region whose
+ * center is on `center`; the tile must be in that region (GDD 5).
+ */
+export interface BuildCommand {
+  readonly type: 'build';
+  readonly building: BuildingKind;
+  readonly center: number;
+  readonly tile: number;
+}
+
 /** Debug: sets a tile's owner (null = neutral), triggering splits and merges. */
 export interface DebugPaintCommand {
   readonly type: 'debugPaint';
@@ -53,8 +69,9 @@ export type CommandError =
   | 'unknownTile'
   /** The player id does not exist. */
   | 'unknownPlayer'
-  /** The unit line or age does not exist. */
+  /** The unit line, building kind or age does not exist. */
   | 'unknownUnit'
+  | 'unknownBuilding'
   | 'unknownAge'
   /** Water and mountains cannot be owned. */
   | 'notOwnable'
@@ -73,6 +90,21 @@ export type CommandError =
   /** The treasury belongs to another player. */
   | 'notYourRegion'
   | 'notEnoughGold'
+  | 'notEnoughMaterials'
+  /** The line needs an active building in the paying region (infantry: barracks). */
+  | 'needsBuilding'
+  /** The player's age has not unlocked the building yet. */
+  | 'ageLocked'
+  /** A building goes only on a tile of the paying region. */
+  | 'outsideRegion'
+  /** The tile already holds a building or a center. */
+  | 'tileOccupied'
+  /** The building cannot stand on this terrain. */
+  | 'wrongTerrain'
+  /** A gold mine needs a hill with an ore vein. */
+  | 'needsVein'
+  /** A lumber camp needs a forest next to it. */
+  | 'needsForest'
   /** The target is neither in the unit's area nor one step outside it. */
   | 'unreachable'
   /** The target is next to the unit's area only across a river. */

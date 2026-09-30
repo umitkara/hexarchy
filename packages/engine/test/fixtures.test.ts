@@ -74,10 +74,10 @@ describe('ASCII fixtures', () => {
   it('reads units: infantry levels 1-4 and workers, on owned tiles', () => {
     const f = parseFixture('A*1 A2  fAw hB4 .');
     expect(f.state.units).toEqual({
-      [f.tile(0, 0)]: { line: 'infantry', level: 1, exhausted: false },
-      [f.tile(1, 0)]: { line: 'infantry', level: 2, exhausted: false },
-      [f.tile(2, 0)]: { line: 'worker', level: 0, exhausted: false },
-      [f.tile(3, 0)]: { line: 'infantry', level: 4, exhausted: false },
+      [f.tile(0, 0)]: { line: 'infantry', level: 1, exhausted: false, hungry: false },
+      [f.tile(1, 0)]: { line: 'infantry', level: 2, exhausted: false, hungry: false },
+      [f.tile(2, 0)]: { line: 'worker', level: 0, exhausted: false, hungry: false },
+      [f.tile(3, 0)]: { line: 'infantry', level: 4, exhausted: false, hungry: false },
     });
     expect(f.state.map.tiles[f.tile(3, 0)]?.terrain).toBe('hill');
     expect(renderFixture(f.state)).toBe('A*1 A2  fAw hB4 .');
@@ -87,13 +87,14 @@ describe('ASCII fixtures', () => {
       line: 'infantry',
       level: 1,
       exhausted: false,
+      hungry: false,
     });
     expect(() => renderFixture(long)).toThrow(/does not fit/);
   });
 
   it('rejects malformed fixtures', () => {
     expect(() => parseFixture('A   B\n  A')).toThrow(/row 1 has 1 tiles/);
-    expect(() => parseFixture('A   Bx')).toThrow(/Bad fixture token/);
+    expect(() => parseFixture('A   Bz')).toThrow(/Bad fixture token/);
     expect(() => parseFixture('.*')).toThrow(/Center without owner/);
     expect(() => parseFixture('A   A\n /\n  A   A')).toThrow(/hits no edge/);
   });

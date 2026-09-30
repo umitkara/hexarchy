@@ -16,6 +16,7 @@ import { attachCameraControls, type DragHandler } from '../input/cameraControls'
 import { registerMapPicker } from '../input/dragDrop';
 import { canControl, gameStore, type GameStoreState } from '../store/gameStore';
 import { Camera } from './camera';
+import { drawBuildings } from './buildingGraphics';
 import { createLayers } from './layers';
 import { drawEdges, drawHover, drawTerrain, TILE_SIZE } from './mapGraphics';
 import { drawTargets, ShieldPreview } from './targetGraphics';
@@ -42,7 +43,7 @@ function viewBounds(map: GameMap): Rect {
   };
 }
 
-/** The unit source being placed: the dragged one, else the armed one. */
+/** The source being placed (unit or building): the dragged one, else the armed one. */
 function activeSource(state: GameStoreState) {
   return state.drag?.source ?? state.armed;
 }
@@ -71,7 +72,8 @@ export function createScene(app: Application): () => void {
   const edges = new Graphics();
   layers.edges.addChild(edges);
   const centers = new Graphics();
-  layers.buildings.addChild(centers);
+  const buildings = new Graphics();
+  layers.buildings.addChild(centers, buildings);
   const units = new Graphics();
   layers.units.addChild(units);
   const targets = new Graphics();
@@ -119,6 +121,7 @@ export function createScene(app: Application): () => void {
   renderMap(initial.game.map);
   drawTerritory(territoryFill, territoryBorders, initial.game);
   drawCenters(centers, initial.game);
+  drawBuildings(buildings, initial.game);
   drawUnits(units, initial.game, null);
   drawSelection(selection, initial.game, initial.selectedTile);
   drawHover(hover, initial.game.map, initial.hoveredTile);
@@ -132,9 +135,15 @@ export function createScene(app: Application): () => void {
     const territoryChanged =
       game.map !== old.map || game.owners !== old.owners || game.centers !== old.centers;
     const unitsChanged = game.units !== old.units || game.currentPlayer !== old.currentPlayer;
+    // Icons sharing a tile make room for each other (tileLayout).
+    const layoutChanged =
+      territoryChanged || game.units !== old.units || game.buildings !== old.buildings;
     if (territoryChanged) drawTerritory(territoryFill, territoryBorders, game);
-    if (territoryChanged || game.units !== old.units) drawCenters(centers, game);
-    if (territoryChanged || unitsChanged || draggedFrom(state) !== draggedFrom(previous)) {
+    if (layoutChanged) {
+      drawCenters(centers, game);
+      drawBuildings(buildings, game);
+    }
+    if (layoutChanged || unitsChanged || draggedFrom(state) !== draggedFrom(previous)) {
       drawUnits(units, game, draggedFrom(state));
     }
     if (game !== old || activeSource(state) !== activeSource(previous)) {

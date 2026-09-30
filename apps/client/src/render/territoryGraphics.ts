@@ -18,6 +18,7 @@ import {
 import type { Graphics } from 'pixi.js';
 import { TILE_SIZE } from './mapGraphics';
 import { PALETTE, playerColor, TERRITORY_FILL_ALPHA } from './palette';
+import { tileLayout } from './tileLayout';
 
 /** Region border stroke width (world units). */
 const BORDER_WIDTH = 3.5;
@@ -141,9 +142,6 @@ const LOCAL_ROOF: readonly UnitPoint[] = [
   [0.32, 0.0],
 ];
 
-/** Offset and scale of a center icon that shares its tile with a unit (see unitAnchor). */
-const SHARED_ICON = { dx: -0.2, dy: -0.14, scale: 0.72 } as const;
-
 /** Capital and local center icons. */
 export function drawCenters(g: Graphics, game: GameState): void {
   const grid = mapGrid(game.map);
@@ -154,12 +152,10 @@ export function drawCenters(g: Graphics, game: GameState): void {
     const owner = game.owners[tile];
     if (!center || owner === undefined || owner === null) continue;
     const color = playerColor(owner);
-    let c = axialToPixel(grid.coord(tile), TILE_SIZE);
-    let s = TILE_SIZE;
-    if (game.units[tile]) {
-      c = { x: c.x + SHARED_ICON.dx * TILE_SIZE, y: c.y + SHARED_ICON.dy * TILE_SIZE };
-      s = TILE_SIZE * SHARED_ICON.scale;
-    }
+    const slot = tileLayout(game, tile, axialToPixel(grid.coord(tile), TILE_SIZE)).center;
+    if (!slot) continue;
+    const c = slot.point;
+    const s = TILE_SIZE * slot.scale;
     if (center.kind === 'capital') {
       g.moveTo(c.x + 0.02 * s, c.y - 0.12 * s)
         .lineTo(c.x + 0.02 * s, c.y - 0.52 * s)

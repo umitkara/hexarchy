@@ -1,4 +1,4 @@
-import type { Age, CenterKind, Resources, UnitLine } from './state/game';
+import type { Age, BuildingKind, CenterKind, Resources, UnitLine } from './state/game';
 import type { Terrain } from './state/map';
 
 /**
@@ -123,6 +123,8 @@ export interface UnitLineStats {
   readonly fights: boolean;
   /** Can merge with a unit of the same line (GDD 6.2; cross-line recipes come later). */
   readonly merges: boolean;
+  /** Building the paying region needs (active) to buy this line (GDD 4.2, 5.2). */
+  readonly requires: BuildingKind | null;
 }
 
 /**
@@ -130,14 +132,186 @@ export interface UnitLineStats {
  * Archers, cavalry and siege join in M5. Combat strength = level (GDD 7.1).
  */
 export const UNITS = {
-  infantry: { cost: 10, buyLevel: 1, upkeep: [0, 1, 3, 9, 27], fights: true, merges: true },
-  worker: { cost: 8, buyLevel: 0, upkeep: [1], fights: false, merges: false },
+  infantry: {
+    cost: 10,
+    buyLevel: 1,
+    upkeep: [0, 1, 3, 9, 27],
+    fights: true,
+    merges: true,
+    requires: 'barracks',
+  },
+  worker: { cost: 8, buyLevel: 0, upkeep: [1], fights: false, merges: false, requires: null },
 } as const satisfies Readonly<Record<UnitLine, UnitLineStats>>;
 
-/** Unit upkeep (GDD 4.4). GDD: food; paid in gold until food arrives in M4. */
+/** Unit upkeep (GDD 4.4): paid in food at turn start. */
 export const UPKEEP = {
-  resource: 'gold',
+  resource: 'food',
 } as const satisfies { readonly resource: keyof Resources };
+
+/** Starvation (GDD 4.5) [DRAFT]. */
+export const HUNGER = {
+  /** Strength lost by a hungry unit (not below 0). */
+  strengthPenalty: 1,
+} as const;
+
+/**
+ * What a building yields per turn (GDD 4.3): `base`, plus `amount` for every neighbor of a
+ * listed terrain — only neighbors owned by the building's owner if `owned` (so capturing
+ * them cuts the yield), any neighbor otherwise.
+ */
+export interface BuildingYield {
+  readonly resource: keyof Resources;
+  readonly base: number;
+  readonly neighbors: Readonly<
+    Partial<Record<Terrain, { readonly amount: number; readonly owned: boolean }>>
+  >;
+}
+
+export interface BuildingStats {
+  /** Materials paid from the region treasury; built instantly (GDD 5). */
+  readonly cost: number;
+  /** Gold per turn; unpaid buildings idle for the turn (GDD 4.4, 4.5). */
+  readonly upkeep: number;
+  /** Earliest age of its owner (GDD 9.1). */
+  readonly age: Age;
+  /** Terrain the building may stand on (GDD 3.1, 5). */
+  readonly terrain: readonly Terrain[];
+  /** Needs an ore vein on its tile (gold mine). */
+  readonly vein: boolean;
+  /** Needs a forest next to its tile (lumber camp: "forest edge"). */
+  readonly nextToForest: boolean;
+  readonly yield: BuildingYield | null;
+  /** Protection of its tile and neighbors; crosses edges like archers (GDD 7.1). */
+  readonly protection: number;
+}
+
+/**
+ * Buildings (GDD 5.1, 5.2) [DRAFT costs]. Production buildings yield by neighborhood (GDD
+ * 4.3); military ones unlock unit lines (see UNITS.requires; archers, cavalry and siege
+ * arrive in M5) or protect (tower).
+ */
+export const BUILDINGS = {
+  farm: {
+    cost: 5,
+    upkeep: 1,
+    age: 'dark',
+    terrain: ['plains'],
+    vein: false,
+    nextToForest: false,
+    yield: { resource: 'food', base: 1, neighbors: { plains: { amount: 1, owned: true } } },
+    protection: 0,
+  },
+  lumberCamp: {
+    cost: 4,
+    upkeep: 1,
+    age: 'dark',
+    terrain: ['plains', 'hill'],
+    vein: false,
+    nextToForest: true,
+    yield: { resource: 'materials', base: 0, neighbors: { forest: { amount: 1, owned: true } } },
+    protection: 0,
+  },
+  quarry: {
+    cost: 10,
+    upkeep: 1,
+    age: 'feudal',
+    terrain: ['hill'],
+    vein: false,
+    nextToForest: false,
+    yield: {
+      resource: 'materials',
+      base: 0,
+      neighbors: { hill: { amount: 1, owned: true }, mountain: { amount: 1, owned: false } },
+    },
+    protection: 0,
+  },
+  goldMine: {
+    cost: 10,
+    upkeep: 0,
+    age: 'dark',
+    terrain: ['hill'],
+    vein: true,
+    nextToForest: false,
+    yield: { resource: 'gold', base: 3, neighbors: {} },
+    protection: 0,
+  },
+  barracks: {
+    cost: 8,
+    upkeep: 1,
+    age: 'dark',
+    terrain: ['plains'],
+    vein: false,
+    nextToForest: false,
+    yield: null,
+    protection: 0,
+  },
+  archeryRange: {
+    cost: 8,
+    upkeep: 1,
+    age: 'dark',
+    terrain: ['plains'],
+    vein: false,
+    nextToForest: false,
+    yield: null,
+    protection: 0,
+  },
+  stable: {
+    cost: 10,
+    upkeep: 2,
+    age: 'feudal',
+    terrain: ['plains'],
+    vein: false,
+    nextToForest: false,
+    yield: null,
+    protection: 0,
+  },
+  workshop: {
+    cost: 15,
+    upkeep: 2,
+    age: 'feudal',
+    terrain: ['plains'],
+    vein: false,
+    nextToForest: false,
+    yield: null,
+    protection: 0,
+  },
+  tower: {
+    cost: 10,
+    upkeep: 2,
+    age: 'feudal',
+    terrain: ['plains', 'hill'],
+    vein: false,
+    nextToForest: false,
+    yield: null,
+    protection: 2,
+  },
+} as const satisfies Readonly<Record<BuildingKind, BuildingStats>>;
+
+/**
+ * Order in which a region pays its buildings' gold upkeep (GDD 4.5): when the gold runs
+ * short, the later ones idle first. Food comes first, military last; ties by tile index.
+ */
+export const BUILDING_UPKEEP_ORDER: readonly BuildingKind[] = [
+  'farm',
+  'lumberCamp',
+  'quarry',
+  'goldMine',
+  'barracks',
+  'archeryRange',
+  'stable',
+  'workshop',
+  'tower',
+];
+
+/** Forest spread (GDD 4.6) [DRAFT]. */
+export const FOREST_SPREAD = {
+  /**
+   * At a player's turn start, each of their plains tiles without a building or center
+   * turns into forest with this chance per neighboring forest (combined: 1 − (1 − p)^n),
+   * unless it is next to a lumber camp.
+   */
+  chancePerForest: 0.015,
+} as const;
 
 /** Merging adds levels (Slay sum) up to this level (GDD 6.2). */
 export const MAX_UNIT_LEVEL = 4;

@@ -11,6 +11,7 @@ import {
   isOwnable,
   isWater,
   mapGrid,
+  RESOURCE_KINDS,
   type GameState,
   type Resources,
 } from '../src/state';
@@ -46,7 +47,7 @@ describe('createGame (GDD 4.7)', () => {
         );
         expect(workers).toHaveLength(START.workers);
         for (const [tile, unit] of workers) {
-          expect(unit).toEqual({ line: 'worker', level: 0, exhausted: false });
+          expect(unit).toEqual({ line: 'worker', level: 0, exhausted: false, hungry: false });
           expect(grid.distance(Number(tile), capitalOf(game, player.id) ?? -1)).toBe(1);
         }
       }
@@ -232,16 +233,20 @@ describe('determinism and invariants', () => {
         const { state: next, events } = apply(state, command);
         expectInvariants(next);
         // Treasuries change only by income (+), destroyed centers, purchases, upkeep and
-        // bankruptcy (−).
-        let expected = before.gold;
+        // starvation (−).
+        const expected: Record<keyof Resources, number> = { ...before };
         for (const e of events) {
-          if (e.type === 'income') expected += e.gold;
-          if (e.type === 'centerRemoved') expected -= e.lost.gold;
-          if (e.type === 'unitBought') expected -= e.cost;
-          if (e.type === 'upkeepPaid' && e.resource === 'gold') expected -= e.amount;
-          if (e.type === 'bankrupt' && e.resource === 'gold') expected -= e.lost;
+          for (const kind of RESOURCE_KINDS) {
+            if (e.type === 'income') expected[kind] += e.income[kind];
+            if (e.type === 'centerRemoved') expected[kind] -= e.lost[kind];
+            if (e.type === 'upkeepPaid' && e.resource === kind) expected[kind] -= e.amount;
+          }
+          if (e.type === 'unitBought') expected.gold -= e.cost;
+          if (e.type === 'buildingBuilt') expected.materials -= e.cost;
+          if (e.type === 'buildingUpkeepPaid') expected.gold -= e.amount;
+          if (e.type === 'starvation') expected.food -= e.lost;
         }
-        expect(total(next).gold).toBe(expected);
+        expect(total(next)).toEqual(expected);
         state = next;
       }
       // Capitals are locked in M2, so every player still has one.

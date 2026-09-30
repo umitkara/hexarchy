@@ -8,7 +8,9 @@ import {
 } from '@hexarchy/engine';
 import type { Graphics } from 'pixi.js';
 import { TILE_SIZE } from './mapGraphics';
+import { drawStatusMark } from './buildingGraphics';
 import { PALETTE, playerColor } from './palette';
+import { tileLayout } from './tileLayout';
 
 /**
  * Unit tokens (GDD 14: flat vector). Infantry is a heater shield in the owner's color with
@@ -29,13 +31,6 @@ const SHIELD: readonly UnitPoint[] = [
   [-0.24, 0.17],
   [-0.3, 0.02],
 ];
-
-/** Where a unit sits on its tile: shifted aside when it shares the tile with a center. */
-export function unitAnchor(center: Point, withCenter: boolean): { point: Point; scale: number } {
-  return withCenter
-    ? { point: { x: center.x + 0.22 * TILE_SIZE, y: center.y + 0.2 * TILE_SIZE }, scale: 0.72 }
-    : { point: center, scale: 1 };
-}
 
 /** Draws one unit token centered at `c`; `size` is the tile size it is drawn for. */
 export function drawUnitToken(
@@ -83,7 +78,10 @@ export function drawUnitToken(
   g.stroke({ width: s * 0.075, color: PALETTE.iconStone, cap: 'round', join: 'round', alpha });
 }
 
-/** All units; `hidden` (a unit being dragged) is drawn as a faint placeholder. */
+/**
+ * All units; `hidden` (a unit being dragged) is drawn as a faint placeholder. Hungry units
+ * carry a minus mark (GDD 4.5: one strength less).
+ */
 export function drawUnits(g: Graphics, game: GameState, hidden: number | null): void {
   const grid = mapGrid(game.map);
   g.clear();
@@ -91,9 +89,11 @@ export function drawUnits(g: Graphics, game: GameState, hidden: number | null): 
     const unit = game.units[tile];
     const owner = game.owners[tile];
     if (!unit || owner === undefined || owner === null) continue;
-    const center = axialToPixel(grid.coord(tile), TILE_SIZE);
-    const { point, scale } = unitAnchor(center, game.centers[tile] !== undefined);
+    const slot = tileLayout(game, tile, axialToPixel(grid.coord(tile), TILE_SIZE)).unit;
+    if (!slot) continue;
+    const size = TILE_SIZE * slot.scale;
     const faded = tile === hidden ? 0.25 : unit.exhausted && owner === game.currentPlayer ? 0.5 : 1;
-    drawUnitToken(g, point, TILE_SIZE * scale, unit, playerColor(owner), faded);
+    drawUnitToken(g, slot.point, size, unit, playerColor(owner), faded);
+    if (unit.hungry && tile !== hidden) drawStatusMark(g, slot.point, size, 'hungry');
   }
 }

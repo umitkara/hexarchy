@@ -67,7 +67,12 @@ describe('movement (GDD 6.4)', () => {
     const f = parseFixture('A*  Aw  A   .');
     expect(refusal(f.state, move(f.tile(1, 0), f.tile(3, 0)))).toBe('cannotCapture');
     const { state } = run(f.state, move(f.tile(1, 0), f.tile(2, 0)));
-    expect(state.units[f.tile(2, 0)]).toEqual({ line: 'worker', level: 0, exhausted: false });
+    expect(state.units[f.tile(2, 0)]).toEqual({
+      line: 'worker',
+      level: 0,
+      exhausted: false,
+      hungry: false,
+    });
   });
 
   it('lists the targets: area, outside steps, and river-blocked neighbors', () => {

@@ -7,6 +7,7 @@ import {
   undo,
   undoTurn,
   validate,
+  type BuildSource,
   type Command,
   type CommandError,
   type GameEvent,
@@ -19,9 +20,12 @@ import {
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
-/** A unit being dragged: from the map or from the recruit panel. */
-export interface UnitDrag {
-  readonly source: UnitSource;
+/** What the player holds to place on the map: a unit (moved or recruited) or a building. */
+export type HandSource = UnitSource | BuildSource;
+
+/** A unit or building being dragged: from the map or from the treasury panel. */
+export interface HandDrag {
+  readonly source: HandSource;
   /** Pointer position relative to the canvas, or null while it is off the canvas. */
   readonly screen: Point | null;
   /** Tile under the pointer (the drop target), or null. */
@@ -42,9 +46,9 @@ export interface GameStoreState {
   readonly hoveredTile: number | null;
   /** Tapped tile whose region the treasury panel shows. */
   readonly selectedTile: number | null;
-  /** Unit picked up by a tap (map unit or recruit button): the next tap places it. */
-  readonly armed: UnitSource | null;
-  readonly drag: UnitDrag | null;
+  /** Picked up by a tap (map unit, recruit or build button): the next tap places it. */
+  readonly armed: HandSource | null;
+  readonly drag: HandDrag | null;
   /** Hotseat debug mode: humans play every player. Off: AI players just pass (M7 adds AI). */
   readonly hotseat: boolean;
   /** Debug paint mode: taps set the tile owner to `paintOwner` (null = neutral). */
@@ -63,10 +67,10 @@ export interface GameStoreState {
   /** A tap on the map (null = off the map): paints, places the armed unit, or selects. */
   readonly tapTile: (tile: number | null) => void;
   readonly selectTile: (tile: number | null) => void;
-  readonly arm: (source: UnitSource | null) => void;
-  readonly startDrag: (source: UnitSource) => void;
+  readonly arm: (source: HandSource | null) => void;
+  readonly startDrag: (source: HandSource) => void;
   readonly updateDrag: (screen: Point | null, tile: number | null) => void;
-  /** Drops the dragged unit on `tile` (null = cancel). */
+  /** Drops what is dragged on `tile` (null = cancel). */
   readonly endDrag: (tile: number | null) => void;
   readonly setHotseat: (hotseat: boolean) => void;
   readonly setPainting: (painting: boolean) => void;
@@ -99,11 +103,29 @@ export function canControl(state: Pick<GameStoreState, 'game' | 'hotseat'>): boo
   return hotseat || game.players[game.currentPlayer]?.controller === 'human';
 }
 
-/** The command that puts a source's unit on `tile`. */
-export function placeCommand(source: UnitSource, tile: number): Command {
-  return source.kind === 'unit'
-    ? { type: 'moveUnit', from: source.from, to: tile }
-    : { type: 'buyUnit', line: source.line, center: source.center, tile };
+/** The command that puts a source's unit or building on `tile`. */
+export function placeCommand(source: HandSource, tile: number): Command {
+  switch (source.kind) {
+    case 'unit':
+      return { type: 'moveUnit', from: source.from, to: tile };
+    case 'recruit':
+      return { type: 'buyUnit', line: source.line, center: source.center, tile };
+    case 'build':
+      return { type: 'build', building: source.building, center: source.center, tile };
+  }
+}
+
+/** True if two sources pick up the same thing (a second click on a button drops it). */
+export function sameSource(a: HandSource | null, b: HandSource): boolean {
+  if (a?.kind !== b.kind) return false;
+  switch (b.kind) {
+    case 'unit':
+      return a.kind === 'unit' && a.from === b.from;
+    case 'recruit':
+      return a.kind === 'recruit' && a.line === b.line && a.center === b.center;
+    case 'build':
+      return a.kind === 'build' && a.building === b.building && a.center === b.center;
+  }
 }
 
 /** True if tapping `tile` should pick up the unit standing there. */

@@ -127,8 +127,8 @@ Düşman komşu karoları alırsa üretim düşer → **kuşatmanın ekonomik an
 
 ### 4.5 Açlık ve iflas (hafif Stronghold)
 - **Yiyecek açığı:** Kasa 0'a çekilir, bölgedeki tüm askerler **Aç** durumuna geçer (**−1 güç**).
-- **Üst üste 2. tur açlık:** Açık kapanana kadar en yüksek bakımlı birimler **isyan eder** (ölür veya tarafsızlaşır). `[TASLAK]`
-- **Altın açığı:** Bakımı ödenemeyen binalar bu tur **üretmez**. `[TASLAK]`
+- **Üst üste 2. tur açlık:** Açık kapanana kadar en yüksek bakımlı birimler **isyan eder** ve ölür. `[TASLAK]`
+- **Altın açığı:** Binaların bakımı sırayla, altın yettiği kadar ödenir; ödenemeyenler bir sonraki tur başına kadar **boşta** kalır: üretmez, birim açmaz, korumaz. `[TASLAK]`
 
 **Kuşatma dinamiği:** Surla çevrili şehir kendi çiftlikleri kadar dayanır; çevre ovalar alınırsa içerideki ordu aç kalır.
 
@@ -419,3 +419,11 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 | 37 | Proje yapısı | pnpm workspace: engine + client | Tek Vite uygulaması |
 | 38 | İşbölümü | Claude kodlar, kullanıcı yönlendirir ve kilometre taşlarında test eder | Birlikte kodlama, öğretici |
 | 39 | Koçbaşı/Atölye çağı | Feodal (taş surla aynı çağ) | v0.1'e 3 çağ, v0.1'de taş sur yok |
+| 40 | Boşta bina | Üretim, birim açma ve koruma birlikte durur | Sadece üretim durur |
+| 41 | Ele geçirilen bina | Saldırana geçer (karo tarafsızlaşırsa yıkılır) | Yıkılır |
+| 42 | Askeri bina bakımı | Kışla/atış alanı 1 A; ahır/atölye/kule 2 A | Hepsi 1 A, hepsi 2 A |
+| 43 | Altın açığında ödeme | Sırayla yettiği kadar öde, kalanlar boşta | Hepsi boşta |
+| 44 | İsyan eden birim | Ölür | Tarafsızlaşır |
+| 45 | Askeri bina yeri | Ova; kule tepe veya ova | Her kara karosu |
+| 46 | Taş ocağı komşuları | Dağ her zaman, tepe sahipliyse | İkisi de sahipli olmalı |
+| 47 | Orman yayılması zamanı | Her oyuncunun tur başında kendi toprağına | Tur sonunda, tüm haritaya |

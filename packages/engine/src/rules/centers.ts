@@ -24,6 +24,7 @@ import { removeUnit } from './upkeep';
  * - A captured center (its tile changes owner) is destroyed with its treasury; the rest of
  *   its region is then handled like any piece without a center.
  * - A unit on a tile that changes owner dies (an attacker then moves in).
+ * - A building changes hands with its tile; it is lost if the tile becomes neutral.
  */
 
 export interface OwnerChange {
@@ -61,6 +62,15 @@ export function changeOwners(
     if (unit && from !== null) {
       events.push({ type: 'unitKilled', tile, owner: from, unit: { ...unit }, reason: 'captured' });
       removeUnit(draft, tile);
+    }
+    const building = draft.buildings[tile];
+    if (building && from !== null) {
+      if (owner === null) {
+        events.push({ type: 'buildingDestroyed', tile, building: building.kind, owner: from });
+        removeBuilding(draft, tile);
+      } else {
+        events.push({ type: 'buildingCaptured', tile, building: building.kind, from, to: owner });
+      }
     }
     draft.owners[tile] = owner;
     events.push({ type: 'tileOwnerChanged', tile, from, to: owner });
@@ -134,6 +144,12 @@ export function reconcileCenters(
       events.push({ type: 'centerFounded', tile, owner: region.owner });
     }
   }
+}
+
+function removeBuilding(draft: Draft<GameState>, tile: number): void {
+  // Buildings are keyed by tile index, so removing one means deleting its key.
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  delete draft.buildings[tile];
 }
 
 function removeCenter(draft: Draft<GameState>, tile: number): void {

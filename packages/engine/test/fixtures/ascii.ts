@@ -2,6 +2,8 @@ import { edgeKey, edgeTiles, rectangleGrid, type EdgeKey } from '../../src/hex';
 import { createRngState } from '../../src/rng';
 import type {
   Age,
+  Building,
+  BuildingKind,
   Center,
   GameState,
   Player,
@@ -29,15 +31,20 @@ import {
  *       A   fA  A  |B   B
  *     .   .   h  =.   ~
  *
- * Token = [terrain][owner][center][unit], each part optional (but not all of them), at
- * most 3 characters:
+ * Token = [terrain][owner][center][building][unit], each part optional (but not all of
+ * them), at most 3 characters:
  *   terrain  `.` plains (default)  `f` forest  `h` hill  `v` hill with ore vein
  *            `^` mountain  `~` sea  `o` lake
  *   owner    `A` `B` `C` `D` = players 0-3 (none = neutral)
  *   center   `*` capital, `+` local center (needs an owner)
- *   unit     `1`-`4` infantry of that level, `w` worker (needs an owner; never exhausted)
- * Plains may omit the terrain character when owned (`A`, `A2`); a neutral plains tile is
- * `.`. Longer combinations (`hA*2`) do not fit a cell: use `withUnit`.
+ *   building (needs an owner; never idle)  `#` farm  `l` lumber camp  `q` quarry
+ *            `$` gold mine  `k` barracks  `r` archery range  `s` stable  `x` workshop
+ *            `t` tower
+ *   unit     `1`-`4` infantry of that level, `w` worker (needs an owner; never exhausted
+ *            or hungry)
+ * Plains may omit the terrain character when owned (`A`, `A2`, `A#`); a neutral plains
+ * tile is `.`. Longer combinations (`hA*2`) do not fit a cell: use `withUnit` and
+ * `withBuilding`.
  *
  * Edges: the separator after a token marks the east edge of that tile: `|` river,
  * `=` ford, space none. The edges between two tile rows (NE/NW/SE/SW sides) are marked
@@ -66,8 +73,24 @@ const TERRAIN_TO_CHAR: Readonly<Record<Terrain, string>> = {
   lake: 'o',
 };
 
+const BUILDING_CHARS: Readonly<Record<string, BuildingKind>> = {
+  '#': 'farm',
+  l: 'lumberCamp',
+  q: 'quarry',
+  $: 'goldMine',
+  k: 'barracks',
+  r: 'archeryRange',
+  s: 'stable',
+  x: 'workshop',
+  t: 'tower',
+};
+
+const BUILDING_TO_CHAR = Object.fromEntries(
+  Object.entries(BUILDING_CHARS).map(([char, kind]) => [kind, char]),
+) as Readonly<Record<BuildingKind, string>>;
+
 const OWNER_CHARS = 'ABCD';
-const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?([1-4w])?$/;
+const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?([#lq$krsxt])?([1-4w])?$/;
 const EDGE_LINE = /^[\s/\\|=]*$/;
 const CELL = 4;
 
@@ -140,6 +163,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
   const owners: (PlayerId | null)[] = [];
   const centers: Record<number, Center> = {};
   const units: Record<number, Unit> = {};
+  const buildings: Record<number, Building> = {};
   const edges: Partial<Record<EdgeKey, EdgeFeature>> = {};
   let highestOwner = -1;
 
@@ -147,7 +171,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
     tokens.forEach(({ token, separator }, col) => {
       const match = token === '' ? null : TOKEN.exec(token);
       if (!match) throw new Error(`Bad fixture token "${token}" at (${col}, ${row})`);
-      const [, terrainChar = '.', ownerChar, centerChar, unitChar] = match;
+      const [, terrainChar = '.', ownerChar, centerChar, buildingChar, unitChar] = match;
       tiles.push({ ...(TERRAIN_CHARS[terrainChar] ?? { terrain: 'plains', vein: false }) });
       const owner = ownerChar === undefined ? null : OWNER_CHARS.indexOf(ownerChar);
       owners.push(owner);
@@ -159,12 +183,17 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
           treasury: { ...(options.treasury ?? { gold: 0, food: 0, materials: 0 }) },
         };
       }
+      const building = buildingChar === undefined ? undefined : BUILDING_CHARS[buildingChar];
+      if (building) {
+        if (owner === null) throw new Error(`Building without owner at (${col}, ${row})`);
+        buildings[index(col, row)] = { kind: building, idle: false };
+      }
       if (unitChar !== undefined) {
         if (owner === null) throw new Error(`Unit without owner at (${col}, ${row})`);
         units[index(col, row)] =
           unitChar === 'w'
-            ? { line: 'worker', level: 0, exhausted: false }
-            : { line: 'infantry', level: Number(unitChar), exhausted: false };
+            ? { line: 'worker', level: 0, exhausted: false, hungry: false }
+            : { line: 'infantry', level: Number(unitChar), exhausted: false, hungry: false };
       }
       const kind = edgeKind(separator);
       if (kind && col + 1 < width) edges[edgeKey(index(col, row), index(col + 1, row))] = { kind };
@@ -202,6 +231,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       owners,
       centers,
       units,
+      buildings,
       rng: createRngState(0),
     },
     tile: (col, row) => {
@@ -230,7 +260,10 @@ function diagonalAt(p: number, row: number, width: number): readonly [number, nu
   return undefined;
 }
 
-/** Renders a rectangle-map state in the fixture format (ownership, centers, units, edges). */
+/**
+ * Renders a rectangle-map state in the fixture format (terrain, ownership, centers,
+ * buildings, units, edges).
+ */
 export function renderFixture(state: GameState): string {
   const { shape } = state.map;
   if (shape.kind !== 'rectangle') throw new Error('Only rectangle maps render as fixtures');
@@ -246,12 +279,14 @@ export function renderFixture(state: GameState): string {
       const owner = state.owners[i] ?? null;
       const center = state.centers[i];
       const unit = state.units[i];
+      const building = state.buildings[i];
       let terrain = tile ? (tile.vein ? 'v' : TERRAIN_TO_CHAR[tile.terrain]) : '.';
       if (terrain === '.' && owner !== null) terrain = '';
       const token =
         terrain +
         (owner === null ? '' : (OWNER_CHARS[owner] ?? '?')) +
         (center ? (center.kind === 'capital' ? '*' : '+') : '') +
+        (building ? BUILDING_TO_CHAR[building.kind] : '') +
         (unit ? (unit.line === 'worker' ? 'w' : String(unit.level)) : '');
       if (token.length > 3) throw new Error(`Tile ${i} does not fit a cell: "${token}"`);
       const kind = col + 1 < width ? edge(i, i + 1) : undefined;
@@ -286,6 +321,19 @@ export function withTreasury(state: GameState, tile: number, treasury: Resources
   const center = state.centers[tile];
   if (!center) throw new Error(`No center on tile ${tile}`);
   return { ...state, centers: { ...state.centers, [tile]: { ...center, treasury } } };
+}
+
+/** A copy of the state with a building put on (or, with `undefined`, removed from) a tile. */
+export function withBuilding(
+  state: GameState,
+  tile: number,
+  building: Building | undefined,
+): GameState {
+  const buildings = { ...state.buildings };
+  if (building) buildings[tile] = building;
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  else delete buildings[tile];
+  return { ...state, buildings };
 }
 
 /** A copy of the state with a unit put on (or, with `undefined`, removed from) a tile. */

@@ -17,7 +17,7 @@ function play(history: TurnHistory, ...commands: Command[]): TurnHistory {
 }
 
 describe('in-turn undo (GDD 13)', () => {
-  const f = parseFixture('A*  A1  A1  .   .   B*', {
+  const f = parseFixture('A*k A1  A1  .   .   B*', {
     treasury: { gold: 20, food: 0, materials: 0 },
   });
   const buy: Command = {

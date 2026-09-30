@@ -1,4 +1,7 @@
 import {
+  BUILDINGS,
+  buildingOutput,
+  checkBuild,
   checkPlacement,
   edgeKey,
   mapGrid,
@@ -6,10 +9,18 @@ import {
   type EdgeKind,
   type GameState,
   type PlacementAction,
-  type UnitSource,
 } from '@hexarchy/engine';
-import { useGameStore } from '../store/gameStore';
-import { COMMAND_ERROR_LABELS, EDGE_LABELS, playerName, TERRAIN_LABELS, unitName } from './labels';
+import { buildEffectText } from '../render/targetGraphics';
+import { useGameStore, type HandSource } from '../store/gameStore';
+import { BuildingIcon } from './BuildingIcon';
+import {
+  BUILDING_LABELS,
+  COMMAND_ERROR_LABELS,
+  EDGE_LABELS,
+  playerName,
+  TERRAIN_LABELS,
+  unitName,
+} from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
 import { UnitIcon } from './UnitIcon';
 
@@ -20,8 +31,15 @@ const ACTION_LABELS: Readonly<Record<PlacementAction, string>> = {
   attack: 'Saldırır, kazanır',
 };
 
-/** What placing the unit in hand on `tile` would do. */
-function verdict(game: GameState, source: UnitSource, tile: number) {
+/** What placing the unit or building in hand on `tile` would do. */
+function verdict(game: GameState, source: HandSource, tile: number) {
+  if (source.kind === 'build') {
+    const check = checkBuild(game, source, tile);
+    if (!check.ok) return { ok: false, text: COMMAND_ERROR_LABELS[check.error] };
+    const effect = buildEffectText(check.placement.output, BUILDINGS[source.building].protection);
+    const name = BUILDING_LABELS[source.building];
+    return { ok: true, text: effect ? `${name}: ${effect}/tur` : `${name} kurulur` };
+  }
   const check = checkPlacement(game, source, tile);
   if (check.ok) {
     const { action, unit } = check.placement;
@@ -33,7 +51,7 @@ function verdict(game: GameState, source: UnitSource, tile: number) {
   return { ok: false, text: COMMAND_ERROR_LABELS[check.error] };
 }
 
-/** Details of the hovered (or tapped) tile: terrain, owner, unit, protection. */
+/** Details of the hovered (or tapped) tile: terrain, owner, building, unit, protection. */
 export function TileInfo() {
   const game = useGameStore((s) => s.game);
   const index = useGameStore((s) => s.hoveredTile);
@@ -53,6 +71,11 @@ export function TileInfo() {
   const { q, r } = grid.coord(index);
   const owner = game.owners[index] ?? null;
   const unit = game.units[index];
+  const building = game.buildings[index];
+  const buildingEffect =
+    building && owner !== null && !building.idle
+      ? buildEffectText(buildingOutput(game, index, building.kind, owner), 0)
+      : '';
   const edgeCounts = new Map<EdgeKind, number>();
   for (const n of grid.neighbors(index)) {
     const kind = map.edges[edgeKey(index, n)]?.kind;
@@ -72,10 +95,19 @@ export function TileInfo() {
           {playerName(owner)}
         </span>
       )}
+      {building && owner !== null && (
+        <span className="tile-unit">
+          <BuildingIcon building={building.kind} player={owner} size={18} />
+          {BUILDING_LABELS[building.kind]}
+          {building.idle && <span className="hud-meta">(boşta: bakım ödenmedi)</span>}
+          {buildingEffect && <span className="hud-meta">({buildingEffect}/tur)</span>}
+        </span>
+      )}
       {unit && owner !== null && (
         <span className="tile-unit">
           <UnitIcon line={unit.line} level={unit.level} player={owner} size={18} />
           {unitName(unit)}
+          {unit.hungry && <span className="tile-hungry">aç (−1 güç)</span>}
           {unit.exhausted && <span className="hud-meta">(yorgun)</span>}
         </span>
       )}

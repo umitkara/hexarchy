@@ -1,8 +1,9 @@
-import { START, UNITS, type MapSize } from '../balance';
+import { START, type MapSize } from '../balance';
 import { generateMap } from '../map/generate';
 import { placeStarts, startTerritory } from '../map/starts';
 import { createRngState, deriveSeed, normalizeSeed } from '../rng';
-import type { Center, GameState, Player, PlayerId, Unit } from './game';
+import { newUnit } from '../rules/units';
+import type { Building, Center, GameState, Player, PlayerId, Unit } from './game';
 import { mapGrid } from './map';
 
 export interface CreateGameOptions {
@@ -26,13 +27,14 @@ export function createGame(options: CreateGameOptions): GameState {
   const owners: (PlayerId | null)[] = new Array<PlayerId | null>(mapGrid(map).tileCount).fill(null);
   const centers: Record<number, Center> = {};
   const units: Record<number, Unit> = {};
+  const buildings: Record<number, Building> = {};
   const players: Player[] = starts.map((capital, id) => {
     const territory = startTerritory(map, capital, START.territoryTiles);
     for (const tile of territory) owners[tile] = id;
     centers[capital] = { kind: 'capital', treasury: { ...START.treasury } };
     // Territory lists the capital first, then its neighbors in direction order.
     for (const tile of territory.slice(1, 1 + START.workers)) {
-      units[tile] = { line: 'worker', level: UNITS.worker.buyLevel, exhausted: false };
+      units[tile] = newUnit('worker');
     }
     return { id, controller: id === 0 ? 'human' : 'ai', age: START.age };
   });
@@ -45,6 +47,7 @@ export function createGame(options: CreateGameOptions): GameState {
     owners,
     centers,
     units,
+    buildings,
     rng: createRngState(deriveSeed(seed, 'game')),
   };
 }

@@ -16,12 +16,17 @@ const buy = (center: number, tile: number, line: UnitLine = 'infantry'): Command
 });
 
 describe('buying units (GDD 4.2, 4.4)', () => {
-  const f = parseFixture('A*  A   A   .   .   B*', { treasury: gold(20) });
+  const f = parseFixture('A*k A   A   .   .   B*', { treasury: gold(20) });
 
   it('pays from the region treasury and places a fresh level 1 unit that can still move', () => {
     const { state, events } = run(f.state, buy(f.tile(0, 0), f.tile(1, 0)));
     expect(state.centers[f.tile(0, 0)]?.treasury.gold).toBe(20 - UNITS.infantry.cost);
-    expect(state.units[f.tile(1, 0)]).toEqual({ line: 'infantry', level: 1, exhausted: false });
+    expect(state.units[f.tile(1, 0)]).toEqual({
+      line: 'infantry',
+      level: 1,
+      exhausted: false,
+      hungry: false,
+    });
     expect(eventsOf(events, 'unitBought')).toEqual([
       {
         type: 'unitBought',
@@ -33,12 +38,12 @@ describe('buying units (GDD 4.2, 4.4)', () => {
       },
     ]);
     const moved = run(state, move(f.tile(1, 0), f.tile(3, 0))).state;
-    expect(renderFixture(moved)).toBe('A*  A   A   A1  .   B*');
+    expect(renderFixture(moved)).toBe('A*k A   A   A1  .   B*');
   });
 
   it('can drop a unit one step outside the region: capture, and the unit is done', () => {
     const { state } = run(f.state, buy(f.tile(0, 0), f.tile(3, 0)));
-    expect(renderFixture(state)).toBe('A*  A   A   A1  .   B*');
+    expect(renderFixture(state)).toBe('A*k A   A   A1  .   B*');
     expect(state.units[f.tile(3, 0)]?.exhausted).toBe(true);
     expect(refusal(f.state, buy(f.tile(0, 0), f.tile(4, 0)))).toBe('unreachable');
   });
@@ -53,19 +58,24 @@ describe('buying units (GDD 4.2, 4.4)', () => {
     expect(refusal(poor, buy(f.tile(0, 0), f.tile(1, 0)))).toBe('notEnoughGold');
     expect(refusal(f.state, buy(f.tile(5, 0), f.tile(4, 0)))).toBe('notYourRegion');
     expect(refusal(f.state, buy(f.tile(1, 0), f.tile(2, 0)))).toBe('noTreasury');
-    const river = parseFixture('A*  A  |.', { treasury: gold(20) });
+    const river = parseFixture('A*k A  |.', { treasury: gold(20) });
     expect(refusal(river.state, buy(river.tile(0, 0), river.tile(2, 0)))).toBe('edgeBlocked');
   });
 
   it('places only within the paying region', () => {
-    const two = parseFixture('A*  A   .   A+  A', { treasury: gold(20) });
+    const two = parseFixture('A*k A   .   A+k A', { treasury: gold(20) });
     expect(refusal(two.state, buy(two.tile(0, 0), two.tile(4, 0)))).toBe('unreachable');
     expect(run(two.state, buy(two.tile(3, 0), two.tile(4, 0))).state.units[4]?.level).toBe(1);
   });
 
   it('buys workers, who cannot capture', () => {
     const { state } = run(f.state, buy(f.tile(0, 0), f.tile(2, 0), 'worker'));
-    expect(state.units[f.tile(2, 0)]).toEqual({ line: 'worker', level: 0, exhausted: false });
+    expect(state.units[f.tile(2, 0)]).toEqual({
+      line: 'worker',
+      level: 0,
+      exhausted: false,
+      hungry: false,
+    });
     expect(state.centers[f.tile(0, 0)]?.treasury.gold).toBe(20 - UNITS.worker.cost);
     expect(refusal(f.state, buy(f.tile(0, 0), f.tile(3, 0), 'worker'))).toBe('cannotCapture');
   });
@@ -75,16 +85,26 @@ describe('merging (GDD 6.2)', () => {
   it('adds levels (Slay sum); the merged unit is done for the turn', () => {
     const f = parseFixture('A*  A1  A1  .');
     const { state, events } = run(f.state, move(f.tile(1, 0), f.tile(2, 0)));
-    expect(state.units[f.tile(2, 0)]).toEqual({ line: 'infantry', level: 2, exhausted: true });
+    expect(state.units[f.tile(2, 0)]).toEqual({
+      line: 'infantry',
+      level: 2,
+      exhausted: true,
+      hungry: false,
+    });
     expect(state.units[f.tile(1, 0)]).toBeUndefined();
     expect(eventsOf(events, 'unitsMerged')).toHaveLength(1);
     expect(refusal(state, move(f.tile(2, 0), f.tile(3, 0)))).toBe('exhausted');
   });
 
   it('merges a bought unit into a standing one', () => {
-    const f = parseFixture('A*  A1  .', { treasury: gold(20) });
+    const f = parseFixture('A*k A1  .', { treasury: gold(20) });
     const { state } = run(f.state, buy(f.tile(0, 0), f.tile(1, 0)));
-    expect(state.units[f.tile(1, 0)]).toEqual({ line: 'infantry', level: 2, exhausted: true });
+    expect(state.units[f.tile(1, 0)]).toEqual({
+      line: 'infantry',
+      level: 2,
+      exhausted: true,
+      hungry: false,
+    });
   });
 
   it('is capped by age: Dark Sv2, Feudal Sv3, Imperial Sv4 (GDD 9.1)', () => {

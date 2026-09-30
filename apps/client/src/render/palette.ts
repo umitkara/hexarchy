@@ -38,6 +38,9 @@ export const PALETTE = {
   targetMerge: 0xf3c93f,
   targetWin: 0x5fd35f,
   targetBlocked: 0xff4d3d,
+  /** Status marks: a building idling for lack of gold, a hungry unit (GDD 4.5). */
+  idleMark: 0x6b6f76,
+  hungryMark: 0xf08a1c,
 } as const;
 
 /**
