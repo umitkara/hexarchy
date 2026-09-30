@@ -1,7 +1,15 @@
-import { hashString, isLand, normalizeSeed, type GameMap, type PlayerId } from '@hexarchy/engine';
+import {
+  AGES,
+  hashString,
+  isLand,
+  normalizeSeed,
+  type Age,
+  type GameMap,
+  type PlayerId,
+} from '@hexarchy/engine';
 import { useMemo, useState } from 'react';
 import { randomSeed, useGameStore } from '../store/gameStore';
-import { describeEvent, playerName } from './labels';
+import { AGE_LABELS, describeEvent, playerName } from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
 
 /** Digits are used as-is; any other text is hashed, so words work as seeds too. */
@@ -24,7 +32,10 @@ function mapStats(map: GameMap) {
 /** Wide screens start with the panel open; phones start with it folded. */
 const OPEN_BY_DEFAULT_MIN_WIDTH = 700;
 
-/** Debug tools: new game by seed, "paint tile" mode (splits/merges), event log. */
+/**
+ * Debug tools: hotseat, the current player's age (level cap), new game by seed, "paint tile"
+ * mode (splits/merges), event log.
+ */
 export function DebugPanel() {
   const map = useGameStore((s) => s.game.map);
   const players = useGameStore((s) => s.game.players);
@@ -34,6 +45,11 @@ export function DebugPanel() {
   const setPainting = useGameStore((s) => s.setPainting);
   const setPaintOwner = useGameStore((s) => s.setPaintOwner);
   const lastEvents = useGameStore((s) => s.lastEvents);
+  const hotseat = useGameStore((s) => s.hotseat);
+  const setHotseat = useGameStore((s) => s.setHotseat);
+  const current = useGameStore((s) => s.game.currentPlayer);
+  const age = useGameStore((s) => s.game.players[s.game.currentPlayer]?.age);
+  const dispatch = useGameStore((s) => s.dispatch);
   const [open, setOpen] = useState(() => window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH);
   const [seedText, setSeedText] = useState(() => String(map.seed));
   const stats = useMemo(() => mapStats(map), [map]);
@@ -72,6 +88,17 @@ export function DebugPanel() {
         >
           Boya: {painting ? 'açık' : 'kapalı'}
         </button>
+        <button
+          type="button"
+          className={hotseat ? 'hud-button' : 'hud-button hud-button-secondary'}
+          aria-pressed={hotseat}
+          title="Açık: her oyuncuyu sırayla sen oynarsın. Kapalı: AI oyuncular pas geçer."
+          onClick={() => {
+            setHotseat(!hotseat);
+          }}
+        >
+          Hotseat: {hotseat ? 'açık' : 'kapalı'}
+        </button>
       </div>
 
       {open && (
@@ -95,6 +122,23 @@ export function DebugPanel() {
               </button>
             ))}
           </div>
+
+          <label className="debug-row age-field">
+            <span className="hud-label">{playerName(current)} çağı</span>
+            <select
+              className="hud-input"
+              value={age}
+              onChange={(event) => {
+                dispatch({ type: 'debugSetAge', player: current, age: event.target.value as Age });
+              }}
+            >
+              {AGES.map((a) => (
+                <option key={a} value={a}>
+                  {AGE_LABELS[a]}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <form
             className="debug-row"

@@ -1,3 +1,4 @@
+import type { Age, CenterKind, Resources, UnitLine } from './state/game';
 import type { Terrain } from './state/map';
 
 /**
@@ -84,8 +85,12 @@ export const START = {
   players: 4,
   /** Starting territory, including the capital tile (capital + its neighbors). */
   territoryTiles: 7,
-  /** Starting treasury of the capital region. The starting worker joins with units (M3/M5). */
+  /** Starting treasury of the capital region. */
   treasury: { gold: 20, food: 10, materials: 10 },
+  /** Workers placed next to the capital. */
+  workers: 1,
+  /** Every player starts in this age. */
+  age: 'dark' satisfies Age,
 } as const;
 
 /** Economy (GDD 4.1-4.2). */
@@ -105,3 +110,55 @@ export const ECONOMY = {
    */
   firstIncomeRound: 2,
 } as const;
+
+/** Per-line unit data (GDD 4.4, 6.1). */
+export interface UnitLineStats {
+  /** Gold price of a bought unit. */
+  readonly cost: number;
+  /** Level of a bought unit; higher levels only come from merging (GDD 4.4). */
+  readonly buyLevel: number;
+  /** Turn-start upkeep by level (index = level). */
+  readonly upkeep: readonly number[];
+  /** Can capture tiles and attack. Support units (strength 0) cannot. */
+  readonly fights: boolean;
+  /** Can merge with a unit of the same line (GDD 6.2; cross-line recipes come later). */
+  readonly merges: boolean;
+}
+
+/**
+ * Unit lines of M3: infantry (Militia, Spearman, Pikeman, Guard) and the worker (level 0).
+ * Archers, cavalry and siege join in M5. Combat strength = level (GDD 7.1).
+ */
+export const UNITS = {
+  infantry: { cost: 10, buyLevel: 1, upkeep: [0, 1, 3, 9, 27], fights: true, merges: true },
+  worker: { cost: 8, buyLevel: 0, upkeep: [1], fights: false, merges: false },
+} as const satisfies Readonly<Record<UnitLine, UnitLineStats>>;
+
+/** Unit upkeep (GDD 4.4). GDD: food; paid in gold until food arrives in M4. */
+export const UPKEEP = {
+  resource: 'gold',
+} as const satisfies { readonly resource: keyof Resources };
+
+/** Merging adds levels (Slay sum) up to this level (GDD 6.2). */
+export const MAX_UNIT_LEVEL = 4;
+
+/** Highest level reachable by merging, by the owner's age (GDD 9.1). */
+export const LEVEL_CAP = {
+  dark: 2,
+  feudal: 3,
+  castle: 3,
+  imperial: 4,
+} as const satisfies Readonly<Record<Age, number>>;
+
+/** Protection a region center gives its own tile and its neighbors (GDD 4.2, 7.1). */
+export const CENTER_PROTECTION = {
+  capital: 1,
+  local: 1,
+} as const satisfies Readonly<Record<CenterKind, number>>;
+
+/**
+ * Counter bonuses (GDD 7.2): attacker line → defender line → extra strength. Only lines that
+ * exist are listed; M5 adds infantry → cavalry +1, cavalry → archer/siege +1.
+ */
+export const COUNTER_BONUS: Readonly<Partial<Record<UnitLine, Partial<Record<UnitLine, number>>>>> =
+  {};

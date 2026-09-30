@@ -68,6 +68,20 @@ export class Camera {
     };
   }
 
+  worldToScreen(world: Point): Point {
+    return {
+      x: (world.x - this.#x) * this.#zoom + this.#viewWidth / 2,
+      y: (world.y - this.#y) * this.#zoom + this.#viewHeight / 2,
+    };
+  }
+
+  /** Centers the view on a world point, keeping the zoom (clamped to the bounds). */
+  centerOn(world: Point): void {
+    this.#x = world.x;
+    this.#y = world.y;
+    this.#update();
+  }
+
   /** Moves the view by a screen-space delta (dragging right moves the world right). */
   panBy(dx: number, dy: number): void {
     this.#x -= dx / this.#zoom;

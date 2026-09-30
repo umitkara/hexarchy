@@ -9,6 +9,7 @@ import {
 } from '../state/game';
 import type { GameEvent } from './events';
 import { computeRegions, innermostTile, regionAt } from './regions';
+import { removeUnit } from './upkeep';
 
 /**
  * Region centers and treasuries under ownership changes (GDD 4.2).
@@ -22,6 +23,7 @@ import { computeRegions, innermostTile, regionAt } from './regions';
  *   then the lowest tile index.
  * - A captured center (its tile changes owner) is destroyed with its treasury; the rest of
  *   its region is then handled like any piece without a center.
+ * - A unit on a tile that changes owner dies (an attacker then moves in).
  */
 
 export interface OwnerChange {
@@ -29,7 +31,10 @@ export interface OwnerChange {
   readonly owner: PlayerId | null;
 }
 
-/** Changes tile owners, then restores the center invariants. */
+/**
+ * Changes tile owners, then restores the center invariants. The only way ownership
+ * changes, so splits, merges and unit losses always follow the same rules.
+ */
 export function changeOwners(
   draft: Draft<GameState>,
   changes: readonly OwnerChange[],
@@ -51,6 +56,11 @@ export function changeOwners(
         lost: { ...center.treasury },
       });
       removeCenter(draft, tile);
+    }
+    const unit = draft.units[tile];
+    if (unit && from !== null) {
+      events.push({ type: 'unitKilled', tile, owner: from, unit: { ...unit }, reason: 'captured' });
+      removeUnit(draft, tile);
     }
     draft.owners[tile] = owner;
     events.push({ type: 'tileOwnerChanged', tile, from, to: owner });

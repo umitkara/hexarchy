@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { edgeKey } from '../src/hex';
 import { mapGrid } from '../src/state';
-import { normalizeFixture, parseFixture, renderFixture } from './fixtures/ascii';
+import { normalizeFixture, parseFixture, renderFixture, withUnit } from './fixtures/ascii';
 
 describe('ASCII fixtures', () => {
   const doc = parseFixture(`
@@ -69,6 +69,26 @@ describe('ASCII fixtures', () => {
       [edgeKey(f.tile(0, 0), f.tile(0, 1))]: { kind: 'river' },
       [edgeKey(f.tile(1, 0), f.tile(1, 1))]: { kind: 'ford' },
     });
+  });
+
+  it('reads units: infantry levels 1-4 and workers, on owned tiles', () => {
+    const f = parseFixture('A*1 A2  fAw hB4 .');
+    expect(f.state.units).toEqual({
+      [f.tile(0, 0)]: { line: 'infantry', level: 1, exhausted: false },
+      [f.tile(1, 0)]: { line: 'infantry', level: 2, exhausted: false },
+      [f.tile(2, 0)]: { line: 'worker', level: 0, exhausted: false },
+      [f.tile(3, 0)]: { line: 'infantry', level: 4, exhausted: false },
+    });
+    expect(f.state.map.tiles[f.tile(3, 0)]?.terrain).toBe('hill');
+    expect(renderFixture(f.state)).toBe('A*1 A2  fAw hB4 .');
+    expect(() => parseFixture('.1')).toThrow(/Unit without owner/);
+    expect(() => parseFixture('A5')).toThrow(/Bad fixture token/);
+    const long = withUnit(parseFixture('hA*').state, 0, {
+      line: 'infantry',
+      level: 1,
+      exhausted: false,
+    });
+    expect(() => renderFixture(long)).toThrow(/does not fit/);
   });
 
   it('rejects malformed fixtures', () => {

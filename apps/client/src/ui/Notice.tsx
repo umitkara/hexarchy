@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { COMMAND_ERROR_LABELS } from './labels';
+import { COMMAND_ERROR_LABELS, QUIET_ERRORS } from './labels';
 
 const NOTICE_MS = 2500;
 
@@ -19,7 +19,7 @@ export function Notice() {
     };
   }, [lastError]);
 
-  if (!lastError || lastError.id === hiddenId || lastError.error === 'noChange') return null;
+  if (!lastError || lastError.id === hiddenId || QUIET_ERRORS.has(lastError.error)) return null;
   return (
     <div className="notice" role="status">
       {COMMAND_ERROR_LABELS[lastError.error]}

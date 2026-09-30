@@ -1,8 +1,8 @@
-import { START, type MapSize } from '../balance';
+import { START, UNITS, type MapSize } from '../balance';
 import { generateMap } from '../map/generate';
 import { placeStarts, startTerritory } from '../map/starts';
 import { createRngState, deriveSeed, normalizeSeed } from '../rng';
-import type { Center, GameState, Player, PlayerId } from './game';
+import type { Center, GameState, Player, PlayerId, Unit } from './game';
 import { mapGrid } from './map';
 
 export interface CreateGameOptions {
@@ -13,8 +13,9 @@ export interface CreateGameOptions {
 
 /**
  * A new game from a seed (GDD 4.7): generated map with fair starts; every player gets a
- * capital, the starting territory around it and the starting treasury; the rest of the
- * map is neutral. Player 0 is the human and moves first. Deterministic.
+ * capital, the starting territory around it, the starting treasury and workers next to the
+ * capital; the rest of the map is neutral. Player 0 is the human and moves first.
+ * Deterministic.
  */
 export function createGame(options: CreateGameOptions): GameState {
   const seed = normalizeSeed(options.seed);
@@ -24,10 +25,16 @@ export function createGame(options: CreateGameOptions): GameState {
 
   const owners: (PlayerId | null)[] = new Array<PlayerId | null>(mapGrid(map).tileCount).fill(null);
   const centers: Record<number, Center> = {};
+  const units: Record<number, Unit> = {};
   const players: Player[] = starts.map((capital, id) => {
-    for (const tile of startTerritory(map, capital, START.territoryTiles)) owners[tile] = id;
+    const territory = startTerritory(map, capital, START.territoryTiles);
+    for (const tile of territory) owners[tile] = id;
     centers[capital] = { kind: 'capital', treasury: { ...START.treasury } };
-    return { id, controller: id === 0 ? 'human' : 'ai' };
+    // Territory lists the capital first, then its neighbors in direction order.
+    for (const tile of territory.slice(1, 1 + START.workers)) {
+      units[tile] = { line: 'worker', level: UNITS.worker.buyLevel, exhausted: false };
+    }
+    return { id, controller: id === 0 ? 'human' : 'ai', age: START.age };
   });
 
   return {
@@ -37,6 +44,7 @@ export function createGame(options: CreateGameOptions): GameState {
     players,
     owners,
     centers,
+    units,
     rng: createRngState(deriveSeed(seed, 'game')),
   };
 }

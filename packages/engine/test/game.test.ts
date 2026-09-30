@@ -14,7 +14,7 @@ import {
   type GameState,
   type Resources,
 } from '../src/state';
-import { expectCenterInvariants } from './fixtures/invariants';
+import { expectCenterInvariants, expectInvariants } from './fixtures/invariants';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => i * 104729 + 3);
 const games = SEEDS.map((seed) => createGame({ seed }));
@@ -27,11 +27,29 @@ describe('createGame (GDD 4.7)', () => {
     expect(createGame({ seed: 78 })).not.toEqual(createGame({ seed: 77 }));
   });
 
-  it('starts round 1 with player 0 (human) and 3 AI players', () => {
+  it('starts round 1 with player 0 (human) and 3 AI players, all in the Dark Age', () => {
     for (const game of games) {
       expect(game.round).toBe(1);
       expect(game.currentPlayer).toBe(0);
       expect(game.players.map((p) => p.controller)).toEqual(['human', 'ai', 'ai', 'ai']);
+      expect(game.players.every((p) => p.age === 'dark')).toBe(true);
+    }
+  });
+
+  it('gives each player one worker next to the capital', () => {
+    for (const game of games) {
+      expectInvariants(game);
+      const grid = mapGrid(game.map);
+      for (const player of game.players) {
+        const workers = Object.entries(game.units).filter(
+          ([tile]) => game.owners[Number(tile)] === player.id,
+        );
+        expect(workers).toHaveLength(START.workers);
+        for (const [tile, unit] of workers) {
+          expect(unit).toEqual({ line: 'worker', level: 0, exhausted: false });
+          expect(grid.distance(Number(tile), capitalOf(game, player.id) ?? -1)).toBe(1);
+        }
+      }
     }
   });
 
@@ -212,12 +230,16 @@ describe('determinism and invariants', () => {
         if (!validate(state, command).ok) continue;
         const before = total(state);
         const { state: next, events } = apply(state, command);
-        expectCenterInvariants(next);
-        // Treasuries change only by income (+) and destroyed centers (−).
+        expectInvariants(next);
+        // Treasuries change only by income (+), destroyed centers, purchases, upkeep and
+        // bankruptcy (−).
         let expected = before.gold;
         for (const e of events) {
           if (e.type === 'income') expected += e.gold;
           if (e.type === 'centerRemoved') expected -= e.lost.gold;
+          if (e.type === 'unitBought') expected -= e.cost;
+          if (e.type === 'upkeepPaid' && e.resource === 'gold') expected -= e.amount;
+          if (e.type === 'bankrupt' && e.resource === 'gold') expected -= e.lost;
         }
         expect(total(next).gold).toBe(expected);
         state = next;

@@ -6,6 +6,13 @@ export interface PanZoomTarget {
   zoomAt(screen: Point, factor: number): void;
 }
 
+/** A drag claimed by the game (e.g. a unit), instead of panning the camera. */
+export interface DragHandler {
+  move(screen: Point): void;
+  end(screen: Point): void;
+  cancel(): void;
+}
+
 export interface CameraControlsOptions {
   readonly element: HTMLElement;
   readonly camera: PanZoomTarget;
@@ -13,6 +20,11 @@ export interface CameraControlsOptions {
   readonly onHover: (screen: Point | null) => void;
   /** A click or tap that did not turn into a drag or pinch. */
   readonly onTap: (screen: Point) => void;
+  /**
+   * Called when a one-finger press turns into a drag, with the press position: return a
+   * handler to drag something (a unit) there, or null to pan the camera.
+   */
+  readonly beginDrag?: (pressed: Point) => DragHandler | null;
 }
 
 /** Movement (px) before a press becomes a drag; touch is less precise than a mouse. */
@@ -33,14 +45,16 @@ interface Sample {
 }
 
 /**
- * Pan (drag), zoom (wheel at cursor, two-finger pinch) and tap/hover for the map canvas.
- * One code path for mouse, pen and touch via Pointer Events.
+ * Pan (drag), zoom (wheel at cursor, two-finger pinch), game drags (units) and tap/hover
+ * for the map canvas. One code path for mouse, pen and touch via Pointer Events.
  */
 export function attachCameraControls(options: CameraControlsOptions): () => void {
-  const { element, camera, onHover, onTap } = options;
+  const { element, camera, onHover, onTap, beginDrag } = options;
   const pointers = new Map<number, Point>();
   let pressStart: Point | null = null;
   let dragging = false;
+  /** The game drag in progress, if the current drag is not a pan. */
+  let gameDrag: DragHandler | null = null;
   /** Set once a gesture involved two pointers; suppresses the tap on release. */
   let multiTouch = false;
   let samples: Sample[] = [];
@@ -109,6 +123,9 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
       dragging = false;
       multiTouch = false;
     } else {
+      // A second finger turns any drag into a pinch.
+      gameDrag?.cancel();
+      gameDrag = null;
       multiTouch = true;
       dragging = true;
       onHover(null);
@@ -141,7 +158,12 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
       const threshold = event.pointerType === 'mouse' ? DRAG_THRESHOLD.mouse : DRAG_THRESHOLD.touch;
       if (Math.hypot(point.x - pressStart.x, point.y - pressStart.y) < threshold) return;
       dragging = true;
-      onHover(null);
+      gameDrag = multiTouch ? null : (beginDrag?.(pressStart) ?? null);
+      if (!gameDrag) onHover(null);
+    }
+    if (gameDrag) {
+      gameDrag.move(point);
+      return;
     }
     camera.panBy(point.x - previous.x, point.y - previous.y);
     samples.push({ ...point, time: event.timeStamp });
@@ -163,7 +185,11 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
     if (pointers.size > 0) return;
 
     const cancelled = event.type === 'pointercancel';
-    if (!dragging && !multiTouch && !cancelled) onTap(point);
+    if (gameDrag) {
+      if (cancelled) gameDrag.cancel();
+      else gameDrag.end(point);
+      gameDrag = null;
+    } else if (!dragging && !multiTouch && !cancelled) onTap(point);
     else if (dragging && !cancelled) startInertia();
     if (event.pointerType === 'mouse' && !cancelled) onHover(point);
     pressStart = null;
@@ -193,6 +219,7 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
 
   return () => {
     stopInertia();
+    gameDrag?.cancel();
     element.removeEventListener('pointerdown', onPointerDown);
     element.removeEventListener('pointermove', onPointerMove);
     element.removeEventListener('pointerup', onPointerUp);

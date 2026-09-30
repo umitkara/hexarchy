@@ -1,6 +1,14 @@
 import { edgeKey, edgeTiles, rectangleGrid, type EdgeKey } from '../../src/hex';
 import { createRngState } from '../../src/rng';
-import type { Center, GameState, Player, PlayerId, Resources } from '../../src/state/game';
+import type {
+  Age,
+  Center,
+  GameState,
+  Player,
+  PlayerId,
+  Resources,
+  Unit,
+} from '../../src/state/game';
 import {
   mapGrid,
   type EdgeFeature,
@@ -21,12 +29,15 @@ import {
  *       A   fA  A  |B   B
  *     .   .   h  =.   ~
  *
- * Token = [terrain][owner][center], each part optional (but not all three):
+ * Token = [terrain][owner][center][unit], each part optional (but not all of them), at
+ * most 3 characters:
  *   terrain  `.` plains (default)  `f` forest  `h` hill  `v` hill with ore vein
  *            `^` mountain  `~` sea  `o` lake
  *   owner    `A` `B` `C` `D` = players 0-3 (none = neutral)
  *   center   `*` capital, `+` local center (needs an owner)
- * Plains may omit the terrain character when owned (`A`); a neutral plains tile is `.`.
+ *   unit     `1`-`4` infantry of that level, `w` worker (needs an owner; never exhausted)
+ * Plains may omit the terrain character when owned (`A`, `A2`); a neutral plains tile is
+ * `.`. Longer combinations (`hA*2`) do not fit a cell: use `withUnit`.
  *
  * Edges: the separator after a token marks the east edge of that tile: `|` river,
  * `=` ford, space none. The edges between two tile rows (NE/NW/SE/SW sides) are marked
@@ -56,7 +67,7 @@ const TERRAIN_TO_CHAR: Readonly<Record<Terrain, string>> = {
 };
 
 const OWNER_CHARS = 'ABCD';
-const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?$/;
+const TOKEN = /^([.fhv^~o])?([A-D])?([*+])?([1-4w])?$/;
 const EDGE_LINE = /^[\s/\\|=]*$/;
 const CELL = 4;
 
@@ -67,6 +78,8 @@ export interface FixtureOptions {
   readonly round?: number;
   /** Treasury of every center (default: empty); override per tile with `withTreasury`. */
   readonly treasury?: Resources;
+  /** Age of every player (default: dark). */
+  readonly age?: Age;
 }
 
 export interface Fixture {
@@ -126,6 +139,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
   const tiles: Tile[] = [];
   const owners: (PlayerId | null)[] = [];
   const centers: Record<number, Center> = {};
+  const units: Record<number, Unit> = {};
   const edges: Partial<Record<EdgeKey, EdgeFeature>> = {};
   let highestOwner = -1;
 
@@ -133,7 +147,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
     tokens.forEach(({ token, separator }, col) => {
       const match = token === '' ? null : TOKEN.exec(token);
       if (!match) throw new Error(`Bad fixture token "${token}" at (${col}, ${row})`);
-      const [, terrainChar = '.', ownerChar, centerChar] = match;
+      const [, terrainChar = '.', ownerChar, centerChar, unitChar] = match;
       tiles.push({ ...(TERRAIN_CHARS[terrainChar] ?? { terrain: 'plains', vein: false }) });
       const owner = ownerChar === undefined ? null : OWNER_CHARS.indexOf(ownerChar);
       owners.push(owner);
@@ -144,6 +158,13 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
           kind: centerChar === '*' ? 'capital' : 'local',
           treasury: { ...(options.treasury ?? { gold: 0, food: 0, materials: 0 }) },
         };
+      }
+      if (unitChar !== undefined) {
+        if (owner === null) throw new Error(`Unit without owner at (${col}, ${row})`);
+        units[index(col, row)] =
+          unitChar === 'w'
+            ? { line: 'worker', level: 0, exhausted: false }
+            : { line: 'infantry', level: Number(unitChar), exhausted: false };
       }
       const kind = edgeKind(separator);
       if (kind && col + 1 < width) edges[edgeKey(index(col, row), index(col + 1, row))] = { kind };
@@ -167,6 +188,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
   const players: Player[] = Array.from({ length: playerCount }, (_, id) => ({
     id,
     controller: id === 0 ? 'human' : 'ai',
+    age: options.age ?? 'dark',
   }));
   const map: GameMap = { seed: 0, shape: { kind: 'rectangle', width, height }, tiles, edges };
   if (mapGrid(map).tileCount !== grid.tileCount) throw new Error('Fixture grid mismatch');
@@ -179,6 +201,7 @@ export function parseFixture(text: string, options: FixtureOptions = {}): Fixtur
       players,
       owners,
       centers,
+      units,
       rng: createRngState(0),
     },
     tile: (col, row) => {
@@ -207,7 +230,7 @@ function diagonalAt(p: number, row: number, width: number): readonly [number, nu
   return undefined;
 }
 
-/** Renders a rectangle-map state in the fixture format (ownership, centers and edges). */
+/** Renders a rectangle-map state in the fixture format (ownership, centers, units, edges). */
 export function renderFixture(state: GameState): string {
   const { shape } = state.map;
   if (shape.kind !== 'rectangle') throw new Error('Only rectangle maps render as fixtures');
@@ -222,12 +245,15 @@ export function renderFixture(state: GameState): string {
       const tile = state.map.tiles[i];
       const owner = state.owners[i] ?? null;
       const center = state.centers[i];
+      const unit = state.units[i];
       let terrain = tile ? (tile.vein ? 'v' : TERRAIN_TO_CHAR[tile.terrain]) : '.';
       if (terrain === '.' && owner !== null) terrain = '';
       const token =
         terrain +
         (owner === null ? '' : (OWNER_CHARS[owner] ?? '?')) +
-        (center ? (center.kind === 'capital' ? '*' : '+') : '');
+        (center ? (center.kind === 'capital' ? '*' : '+') : '') +
+        (unit ? (unit.line === 'worker' ? 'w' : String(unit.level)) : '');
+      if (token.length > 3) throw new Error(`Tile ${i} does not fit a cell: "${token}"`);
       const kind = col + 1 < width ? edge(i, i + 1) : undefined;
       line += token.padEnd(3) + (kind === 'river' ? '|' : kind === 'ford' ? '=' : ' ');
     }
@@ -260,4 +286,13 @@ export function withTreasury(state: GameState, tile: number, treasury: Resources
   const center = state.centers[tile];
   if (!center) throw new Error(`No center on tile ${tile}`);
   return { ...state, centers: { ...state.centers, [tile]: { ...center, treasury } } };
+}
+
+/** A copy of the state with a unit put on (or, with `undefined`, removed from) a tile. */
+export function withUnit(state: GameState, tile: number, unit: Unit | undefined): GameState {
+  const units = { ...state.units };
+  if (unit) units[tile] = unit;
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  else delete units[tile];
+  return { ...state, units };
 }

@@ -310,10 +310,132 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.income {
+.income,
+.upkeep {
   font-size: 0.8rem;
   font-weight: 600;
   color: #9fd67a;
+}
+
+.upkeep {
+  color: #f09a8a;
+}
+
+.hud-side {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.turn-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.button-icon {
+  display: none;
+}
+
+.hud-button:disabled,
+.recruit-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hud-button:disabled:hover {
+  background: var(--accent);
+}
+
+.hud-button-secondary:disabled:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.recruit {
+  display: flex;
+  gap: 8px;
+}
+
+/* Recruit buttons are dragged onto the map: no browser panning or scrolling on them. */
+.recruit-button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 4px 12px;
+  font: inherit;
+  color: var(--text);
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.recruit-button:not(:disabled):hover {
+  background: rgb(255 255 255 / 0.16);
+}
+
+.recruit-button[aria-pressed='true'] {
+  background: rgb(255 255 255 / 0.2);
+  border-color: var(--text);
+}
+
+.recruit-button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.recruit-label {
+  flex: 1;
+  font-weight: 600;
+  text-align: left;
+}
+
+.recruit-cost {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.recruit-cost::after {
+  content: ' ⛁';
+  font-size: 0.8em;
+}
+
+.unit-icon {
+  flex: none;
+}
+
+.tile-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.tile-verdict {
+  padding: 2px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(150 40 30 / 0.9);
+  border-radius: 6px;
+}
+
+.tile-verdict-ok {
+  color: #102a10;
+  background: #7fd46a;
+}
+
+.action-hint {
+  justify-content: space-between;
+}
+
+.age-field select {
+  width: auto;
 }
 
 .paint-toggle {
@@ -382,5 +504,51 @@ body {
   .region-panel {
     min-width: 0;
     width: 100%;
+  }
+
+  /* Phones: keep the map visible; the HUD shrinks to the essentials. */
+  .title-panel,
+  .tile-coords {
+    display: none;
+  }
+
+  .hud-panel {
+    padding: 8px 10px;
+  }
+
+  .turn-panel,
+  .tile-info {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .turn-panel .hud-button {
+    padding: 0 12px;
+  }
+
+  .button-icon {
+    display: inline;
+    font-size: 1.25rem;
+  }
+
+  .button-text {
+    display: none;
+  }
+
+  .tile-info {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    min-height: 0;
+    font-size: 0.9rem;
+  }
+
+  .treasury dd {
+    flex-wrap: wrap;
+    column-gap: 4px;
+    font-size: 1.1rem;
+  }
+
+  .recruit-button {
+    min-height: 48px;
   }
 }

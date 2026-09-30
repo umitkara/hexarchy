@@ -33,6 +33,11 @@ export const PALETTE = {
   iconOutline: 0x1d1a16,
   /** Light body of center icons (walls, roofs are in the player color). */
   iconStone: 0xf1ead8,
+  /** Unit targets: move within own land, merge, capture/attack, protected (refused). */
+  targetMove: 0xffffff,
+  targetMerge: 0xf3c93f,
+  targetWin: 0x5fd35f,
+  targetBlocked: 0xff4d3d,
 } as const;
 
 /**

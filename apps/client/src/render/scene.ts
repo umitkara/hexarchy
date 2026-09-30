@@ -1,4 +1,6 @@
 import {
+  axialToPixel,
+  capitalOf,
   hexBounds,
   isLand,
   mapGrid,
@@ -10,12 +12,15 @@ import {
   type Rect,
 } from '@hexarchy/engine';
 import { Container, Graphics, type Application } from 'pixi.js';
-import { attachCameraControls } from '../input/cameraControls';
-import { gameStore } from '../store/gameStore';
+import { attachCameraControls, type DragHandler } from '../input/cameraControls';
+import { registerMapPicker } from '../input/dragDrop';
+import { canControl, gameStore, type GameStoreState } from '../store/gameStore';
 import { Camera } from './camera';
 import { createLayers } from './layers';
 import { drawEdges, drawHover, drawTerrain, TILE_SIZE } from './mapGraphics';
+import { drawTargets, ShieldPreview } from './targetGraphics';
 import { drawCenters, drawSelection, drawTerritory } from './territoryGraphics';
+import { drawUnits } from './unitGraphics';
 
 /** Sea margin (in tiles) around the land that the camera may show. */
 const VIEW_MARGIN_TILES = 1.5;
@@ -37,9 +42,19 @@ function viewBounds(map: GameMap): Rect {
   };
 }
 
+/** The unit source being placed: the dragged one, else the armed one. */
+function activeSource(state: GameStoreState) {
+  return state.drag?.source ?? state.armed;
+}
+
+/** Tile whose unit is lifted by a drag (drawn faint in place). */
+function draggedFrom(state: GameStoreState): number | null {
+  return state.drag?.source.kind === 'unit' ? state.drag.source.from : null;
+}
+
 /**
- * Game scene: static map layers, territory (ownership, region borders, centers),
- * hover/selection highlights, camera and its pointer controls.
+ * Game scene: static map layers, territory (ownership, region borders, centers), units,
+ * targets and highlights, the shield preview (screen space), camera and pointer controls.
  */
 export function createScene(app: Application): () => void {
   // A render group: camera moves only update one GPU transform, children stay untouched.
@@ -57,12 +72,31 @@ export function createScene(app: Application): () => void {
   layers.edges.addChild(edges);
   const centers = new Graphics();
   layers.buildings.addChild(centers);
+  const units = new Graphics();
+  layers.units.addChild(units);
+  const targets = new Graphics();
   const selection = new Graphics();
   const hover = new Graphics();
-  layers.highlights.addChild(selection, hover);
+  layers.highlights.addChild(targets, selection, hover);
+  // Screen-space overlay above the world: not scaled by the camera.
+  const preview = new ShieldPreview();
+  app.stage.addChild(preview.container);
 
-  const camera = new Camera({ fitPadding: 16, minZoomOfFit: 0.85, maxZoom: 4 }, () => {
+  const renderPreview = () => {
+    const state = gameStore.getState();
+    preview.draw({
+      game: state.game,
+      source: activeSource(state),
+      target: state.drag ? state.drag.tile : state.hoveredTile,
+      ghost: state.drag?.screen ?? null,
+      zoom: camera.zoom,
+      toScreen: (p) => camera.worldToScreen(p),
+    });
+  };
+
+  const camera: Camera = new Camera({ fitPadding: 16, minZoomOfFit: 0.85, maxZoom: 4 }, () => {
     camera.applyTo(world);
+    renderPreview();
   });
   camera.setViewport(app.screen.width, app.screen.height);
 
@@ -73,31 +107,55 @@ export function createScene(app: Application): () => void {
     // Keep the view when regenerating the same map shape, so seeds can be compared.
     if (!previous || !sameShape(previous.shape, map.shape)) camera.fit();
   };
-  const renderTerritory = (game: GameState) => {
-    drawTerritory(territoryFill, territoryBorders, game);
-    drawCenters(centers, game);
+
+  const centerOnCapital = (game: GameState) => {
+    const capital = capitalOf(game, game.currentPlayer);
+    if (capital !== undefined) {
+      camera.centerOn(axialToPixel(mapGrid(game.map).coord(capital), TILE_SIZE));
+    }
   };
 
   const initial = gameStore.getState();
   renderMap(initial.game.map);
-  renderTerritory(initial.game);
+  drawTerritory(territoryFill, territoryBorders, initial.game);
+  drawCenters(centers, initial.game);
+  drawUnits(units, initial.game, null);
   drawSelection(selection, initial.game, initial.selectedTile);
   drawHover(hover, initial.game.map, initial.hoveredTile);
+  renderPreview();
 
   const unsubscribe = gameStore.subscribe((state, previous) => {
     const { game } = state;
     const old = previous.game;
     if (game.map !== old.map) renderMap(game.map, old.map);
-    // Ownership and centers only change through commands; their identity tells.
+    // Game data only changes through commands; identity tells what changed.
     const territoryChanged =
       game.map !== old.map || game.owners !== old.owners || game.centers !== old.centers;
-    if (territoryChanged) renderTerritory(game);
+    const unitsChanged = game.units !== old.units || game.currentPlayer !== old.currentPlayer;
+    if (territoryChanged) drawTerritory(territoryFill, territoryBorders, game);
+    if (territoryChanged || game.units !== old.units) drawCenters(centers, game);
+    if (territoryChanged || unitsChanged || draggedFrom(state) !== draggedFrom(previous)) {
+      drawUnits(units, game, draggedFrom(state));
+    }
+    if (game !== old || activeSource(state) !== activeSource(previous)) {
+      drawTargets(targets, game, activeSource(state));
+    }
     if (territoryChanged || state.selectedTile !== previous.selectedTile) {
       drawSelection(selection, game, state.selectedTile);
     }
     if (game.map !== old.map || state.hoveredTile !== previous.hoveredTile) {
       drawHover(hover, game.map, state.hoveredTile);
     }
+    if (
+      game !== old ||
+      state.hoveredTile !== previous.hoveredTile ||
+      state.drag !== previous.drag ||
+      state.armed !== previous.armed
+    ) {
+      renderPreview();
+    }
+    // Hotseat: follow the player on turn.
+    if (game.map === old.map && game.currentPlayer !== old.currentPlayer) centerOnCapital(game);
   });
 
   const tileAt = (screen: Point | null): number | null => {
@@ -106,6 +164,30 @@ export function createScene(app: Application): () => void {
     const index = mapGrid(gameStore.getState().game.map).indexOf(hex.q, hex.r);
     return index < 0 ? null : index;
   };
+
+  /** A drag that starts on a movable unit of the player on turn picks the unit up. */
+  const beginDrag = (pressed: Point): DragHandler | null => {
+    const state = gameStore.getState();
+    const tile = tileAt(pressed);
+    if (tile === null || state.painting || !canControl(state)) return null;
+    const unit = state.game.units[tile];
+    if (!unit || unit.exhausted || state.game.owners[tile] !== state.game.currentPlayer) {
+      return null;
+    }
+    state.startDrag({ kind: 'unit', from: tile });
+    return {
+      move: (screen) => {
+        gameStore.getState().updateDrag(screen, tileAt(screen));
+      },
+      end: (screen) => {
+        gameStore.getState().endDrag(tileAt(screen));
+      },
+      cancel: () => {
+        gameStore.getState().endDrag(null);
+      },
+    };
+  };
+
   const detachControls = attachCameraControls({
     element: app.canvas,
     camera,
@@ -117,6 +199,17 @@ export function createScene(app: Application): () => void {
       gameStore.getState().setHoveredTile(tile);
       gameStore.getState().tapTile(tile);
     },
+    beginDrag,
+  });
+
+  const unregisterPicker = registerMapPicker({
+    toCanvas: (clientX, clientY) => {
+      const rect = app.canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      return x < 0 || y < 0 || x > rect.width || y > rect.height ? null : { x, y };
+    },
+    tileAt,
   });
 
   const onResize = () => {
@@ -126,8 +219,10 @@ export function createScene(app: Application): () => void {
 
   return () => {
     app.renderer.off('resize', onResize);
+    unregisterPicker();
     detachControls();
     unsubscribe();
     world.destroy({ children: true });
+    preview.container.destroy({ children: true });
   };
 }
