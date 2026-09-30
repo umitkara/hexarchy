@@ -1,4 +1,4 @@
-import { canUndoTurn, isDecided, useGameStore } from '../store/gameStore';
+import { canUndoTurn, isAiTurn, isDecided, useGameStore } from '../store/gameStore';
 import { AgeChip } from './AgePanel';
 import { playerName } from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
@@ -10,6 +10,7 @@ export function TurnPanel() {
   const human = useGameStore((s) => s.game.players[current]?.controller === 'human');
   const decided = useGameStore(isDecided);
   const hotseat = useGameStore((s) => s.hotseat);
+  const aiPlaying = useGameStore(isAiTurn);
   const undoable = useGameStore(canUndoTurn);
   const dispatch = useGameStore((s) => s.dispatch);
   const undo = useGameStore((s) => s.undo);
@@ -26,7 +27,7 @@ export function TurnPanel() {
           {hotseat ? (
             <span className="hud-meta">(hotseat)</span>
           ) : (
-            human && <span className="hud-meta">(sen)</span>
+            <span className="hud-meta">{human ? '(sen)' : '(AI)'}</span>
           )}
         </span>
       </div>
@@ -74,6 +75,7 @@ export function TurnPanel() {
           <button
             type="button"
             className="hud-button"
+            disabled={aiPlaying}
             onClick={() => {
               dispatch({ type: 'endTurn' });
             }}

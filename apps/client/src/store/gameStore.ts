@@ -1,6 +1,8 @@
 import {
+  aiStep,
   applyToHistory,
   canUndo,
+  capitalOf,
   createGame,
   isGameOver,
   normalizeSeed,
@@ -8,6 +10,7 @@ import {
   undo,
   undoTurn,
   validate,
+  type AiTurn,
   type BreachSource,
   type BuildSource,
   type Command,
@@ -73,8 +76,18 @@ export interface GameStoreState {
   /** Picked up by a tap (map unit, recruit or build button): the next tap places it. */
   readonly armed: HandSource | null;
   readonly drag: HandDrag | null;
-  /** Hotseat debug mode: humans play every player. Off: AI players just pass (M7 adds AI). */
+  /** Hotseat debug mode: humans play every player. Off: the AI plays its players. */
   readonly hotseat: boolean;
+  /** Counters of the AI turn being played (engine `aiStep`), null between AI turns. */
+  readonly aiTurn: AiTurn | null;
+  /** The rest of the AI turns is being skipped: steps run without pauses. */
+  readonly aiFast: boolean;
+  /** The last AI move: who made it and its tiles, highlighted on the map. */
+  readonly aiMove: AiMove | null;
+  /** Tiles the AI players took since the human's last command. */
+  readonly aiTaken: readonly number[];
+  /** Recent events with ids, for the news banner (the AI plays many commands in a row). */
+  readonly news: readonly NewsItem[];
   /** Debug paint mode: taps set the tile owner to `paintOwner` (null = neutral). */
   readonly painting: boolean;
   readonly paintOwner: PlayerId | null;
@@ -82,13 +95,17 @@ export interface GameStoreState {
   readonly agePanelOpen: boolean;
   /** The end screen was put away to look at the final map. */
   readonly resultsHidden: boolean;
-  /** Events of the last applied command, for the debug log and the news banner. */
+  /** Events of the last human command and of the AI moves since, for the debug log. */
   readonly lastEvents: readonly GameEvent[];
   /** Why the last command was refused; cleared by the next successful one. */
   readonly lastError: { readonly error: CommandError; readonly id: number } | null;
   readonly newGame: (seed: number) => void;
   /** Validates and applies a command; returns whether it was applied. */
   readonly dispatch: (command: Command) => boolean;
+  /** Plays the AI's next command(s) (no-op unless an AI player is on turn); see aiDriver. */
+  readonly stepAi: () => void;
+  /** Skips the rest of the AI turns: they play on without pauses. */
+  readonly skipAi: () => void;
   readonly undo: () => void;
   readonly undoTurn: () => void;
   readonly setHoveredTile: (tile: number | null) => void;
@@ -106,6 +123,19 @@ export interface GameStoreState {
   readonly setAgePanelOpen: (open: boolean) => void;
   readonly setResultsHidden: (hidden: boolean) => void;
 }
+
+export interface AiMove {
+  readonly player: PlayerId;
+  readonly tiles: readonly number[];
+}
+
+export interface NewsItem {
+  readonly id: number;
+  readonly event: GameEvent;
+}
+
+/** News items kept (older ones have long faded). */
+const NEWS_KEPT = 12;
 
 const SEED_PARAM = 'seed';
 
@@ -127,6 +157,15 @@ function writeSeedToUrl(seed: number): void {
   window.history.replaceState(null, '', url);
 }
 
+/**
+ * True while the AI plays: hotseat is off, the player on turn is an AI and the match is not
+ * decided for the screen (after the human's elimination the AI stops).
+ */
+export function isAiTurn(state: Pick<GameStoreState, 'game' | 'hotseat'>): boolean {
+  const { game, hotseat } = state;
+  return !hotseat && game.players[game.currentPlayer]?.controller === 'ai' && !isDecided(state);
+}
+
 /** True if the human at the screen may act for the player on turn (never once it is over). */
 export function canControl(state: Pick<GameStoreState, 'game' | 'hotseat'>): boolean {
   const { game, hotseat } = state;
@@ -145,8 +184,31 @@ export function isDecided(state: Pick<GameStoreState, 'game' | 'hotseat'>): bool
 }
 
 /** True if this turn's moves can be taken back (not the one that ended the game). */
-export function canUndoTurn(state: Pick<GameStoreState, 'history'>): boolean {
-  return canUndo(state.history) && !isGameOver(state.history.present);
+export function canUndoTurn(state: Pick<GameStoreState, 'history' | 'game' | 'hotseat'>): boolean {
+  return canUndo(state.history) && !isGameOver(state.history.present) && canControl(state);
+}
+
+/** Map tiles a command acts on (to highlight AI moves). */
+function commandTiles(game: GameState, command: Command): number[] {
+  switch (command.type) {
+    case 'moveUnit':
+      return [command.from, command.to];
+    case 'buyUnit':
+    case 'build':
+      return [command.tile];
+    case 'buildEdge':
+      return [command.worker, command.to];
+    case 'breachEdge':
+      return [command.from, command.to];
+    case 'archerVolley':
+      return [command.from, command.target];
+    case 'advanceAge': {
+      const capital = capitalOf(game, game.currentPlayer);
+      return capital === undefined ? [] : [capital];
+    }
+    default:
+      return [];
+  }
 }
 
 /** The command that puts a source's unit or building on `tile`. */
@@ -198,27 +260,45 @@ function isMovableUnit(game: GameState, tile: number): boolean {
 }
 
 let errorId = 0;
+let newsId = 0;
+
+/** Time budget of one skip slice: the rest waits for the next timer, so the page stays live. */
+const FAST_SLICE_MS = 40;
 
 const initialGame = createGame({ seed: initialSeed() });
 
 export const gameStore = createStore<GameStoreState>()((set, get) => {
-  /** Applies a command to the history; without hotseat, AI players pass their turns. */
-  const commit = (history: TurnHistory, command: Command) => {
-    let result = applyToHistory(history, command);
-    const events = [...result.events];
-    const { hotseat } = get();
-    for (let i = 0; !hotseat && i < result.history.present.players.length; i++) {
-      const { present } = result.history;
-      if (isGameOver(present)) break;
-      if (present.players[present.currentPlayer]?.controller !== 'ai') break;
-      result = applyToHistory(result.history, { type: 'endTurn' });
-      events.push(...result.events);
-    }
-    return { history: result.history, events };
-  };
-
   const setHistory = (history: TurnHistory, extra: Partial<GameStoreState> = {}) => {
     set({ history, game: history.present, armed: null, drag: null, ...extra });
+  };
+
+  const withNews = (events: readonly GameEvent[]): readonly NewsItem[] => {
+    const { news } = get();
+    if (events.length === 0) return news;
+    return [...news, ...events.map((event) => ({ id: ++newsId, event }))].slice(-NEWS_KEPT);
+  };
+
+  /** Applies the AI's next command; false if there is none (not an AI turn). */
+  const playAiStep = (): boolean => {
+    const state = get();
+    if (!isAiTurn(state)) return false;
+    const step = aiStep(state.game, state.aiTurn ?? undefined);
+    if (!step) return false;
+    const { command } = step.choice;
+    const result = applyToHistory(state.history, command);
+    const taken = result.events.flatMap((e) =>
+      e.type === 'tileOwnerChanged' && e.to !== null ? [e.tile] : [],
+    );
+    const moves = commandTiles(state.game, command);
+    setHistory(result.history, {
+      aiTurn: command.type === 'endTurn' ? null : step.turn,
+      aiMove: moves.length > 0 ? { player: state.game.currentPlayer, tiles: moves } : state.aiMove,
+      aiTaken: taken.length > 0 ? [...state.aiTaken, ...taken] : state.aiTaken,
+      lastEvents: [...state.lastEvents, ...result.events],
+      news: withNews(result.events),
+      lastError: null,
+    });
+    return true;
   };
 
   return {
@@ -228,7 +308,12 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     selectedTile: null,
     armed: null,
     drag: null,
-    hotseat: true,
+    hotseat: false,
+    aiTurn: null,
+    aiFast: false,
+    aiMove: null,
+    aiTaken: [],
+    news: [],
     painting: false,
     paintOwner: 0,
     agePanelOpen: false,
@@ -241,6 +326,11 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
       writeSeedToUrl(game.map.seed);
       setHistory(startHistory(game), {
         selectedTile: null,
+        aiTurn: null,
+        aiFast: false,
+        aiMove: null,
+        aiTaken: [],
+        news: [],
         lastEvents: [],
         lastError: null,
         agePanelOpen: false,
@@ -250,14 +340,36 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
 
     dispatch(command) {
       const state = get();
+      // The screen waits while the AI plays.
+      if (isAiTurn(state)) return false;
       const validation = validate(state.game, command);
       if (!validation.ok) {
         set({ lastError: { error: validation.error, id: ++errorId } });
         return false;
       }
-      const { history, events } = commit(state.history, command);
-      setHistory(history, { lastEvents: events, lastError: null });
+      const { history, events } = applyToHistory(state.history, command);
+      setHistory(history, {
+        lastEvents: events,
+        news: withNews(events),
+        lastError: null,
+        aiMove: null,
+        aiTaken: [],
+        aiFast: false,
+      });
       return true;
+    },
+
+    stepAi() {
+      if (!get().aiFast) {
+        playAiStep();
+        return;
+      }
+      const until = performance.now() + FAST_SLICE_MS;
+      while (playAiStep() && performance.now() < until);
+    },
+
+    skipAi() {
+      if (isAiTurn(get())) set({ aiFast: true });
     },
 
     undo() {
@@ -335,7 +447,7 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     },
 
     setHotseat(hotseat) {
-      set({ hotseat });
+      set({ hotseat, aiTurn: null, aiFast: false });
     },
 
     setPainting(painting) {

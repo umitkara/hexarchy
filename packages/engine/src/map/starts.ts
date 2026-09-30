@@ -7,8 +7,9 @@ import { isOwnable, isWater, mapGrid, type GameMap, type Terrain, type Tile } fr
 /**
  * Fair start placement (GDD 3.3).
  *
- * 1. Candidates: plains tiles whose starting territory (the capital plus the nearest tiles
- *    linked to it in the treasury graph) is complete and compact, with enough land around.
+ * 1. Candidates: plains tiles of the largest land area (ownable tiles linked by land) whose
+ *    starting territory (the capital plus the nearest tiles linked to it in the treasury
+ *    graph) is complete and compact, with enough land around.
  * 2. Placement: random restarts of a spread-out search (farthest-point sampling); the best
  *    set maximizes the minimum capital distance minus the spread of water and land counts
  *    within the fair radius.
@@ -51,6 +52,29 @@ function ownable(map: GameMap, tile: number): boolean {
   return t !== undefined && isOwnable(t.terrain);
 }
 
+/**
+ * The largest set of ownable tiles linked by land (rivers can be bridged, mountains and
+ * water cannot be crossed): starts elsewhere could never be reached by the others.
+ */
+function largestLandArea(map: GameMap, grid: HexGrid): Set<number> {
+  const seen = new Uint8Array(grid.tileCount);
+  let largest: number[] = [];
+  for (let start = 0; start < grid.tileCount; start++) {
+    if (seen[start] || !ownable(map, start)) continue;
+    seen[start] = 1;
+    const area = [start];
+    for (const tile of area) {
+      for (const n of grid.neighbors(tile)) {
+        if (seen[n] || !ownable(map, n)) continue;
+        seen[n] = 1;
+        area.push(n);
+      }
+    }
+    if (area.length > largest.length) largest = area;
+  }
+  return new Set(largest);
+}
+
 function within(grid: HexGrid, center: number, radius: number): number[] {
   const tiles: number[] = [];
   for (let i = 0; i < grid.tileCount; i++) if (grid.distance(center, i) <= radius) tiles.push(i);
@@ -73,9 +97,10 @@ export function placeStarts(map: GameMap, count: number, seed: number): StartPla
   const grid = mapGrid(map);
   const rng = Rng.fromSeed(seed);
 
+  const mainland = largestLandArea(map, grid);
   const areas = new Map<number, Area>();
   for (let tile = 0; tile < grid.tileCount; tile++) {
-    if (map.tiles[tile]?.terrain !== 'plains') continue;
+    if (map.tiles[tile]?.terrain !== 'plains' || !mainland.has(tile)) continue;
     const territory = startTerritory(map, tile, START.territoryTiles);
     if (territory.length < START.territoryTiles) continue;
     if (territory.some((t) => grid.distance(tile, t) > cfg.territoryRadius)) continue;
@@ -130,6 +155,7 @@ export function placeStarts(map: GameMap, count: number, seed: number): StartPla
     tiles,
     rng,
     chosen.map((a) => a.territory),
+    { forest: cfg.minTerritoryForests },
   );
   equalize(
     grid,
@@ -147,17 +173,24 @@ export function placeStarts(map: GameMap, count: number, seed: number): StartPla
 
 type MutableTile = { -readonly [K in keyof Tile]: Tile[K] };
 
-/** Brings the forest and hill counts of every zone to the (rounded) mean, via plains. */
+/**
+ * Brings the forest and hill counts of every zone to the (rounded) mean, via plains; at
+ * least to `minimum` of a kind.
+ */
 function equalize(
   grid: HexGrid,
   tiles: MutableTile[],
   rng: Rng,
   zones: readonly (readonly number[])[],
+  minimum: Partial<Record<'hill' | 'forest', number>> = {},
 ) {
   for (const kind of ['hill', 'forest'] as const) {
     const count = (zone: readonly number[]) =>
       zone.filter((t) => tiles[t]?.terrain === kind).length;
-    const target = Math.round(zones.reduce((sum, z) => sum + count(z), 0) / zones.length);
+    const target = Math.max(
+      minimum[kind] ?? 0,
+      Math.round(zones.reduce((sum, z) => sum + count(z), 0) / zones.length),
+    );
     // Hills cluster next to hills and mountains, forests next to forests.
     const likes = (t: number) =>
       grid.neighbors(t).filter((n) => {

@@ -10,6 +10,7 @@ export function getEngineInfo(): EngineInfo {
   return { name: ENGINE_NAME, version: ENGINE_VERSION };
 }
 
+export * from './ai';
 export * from './balance';
 export * from './commands';
 export * from './hex';

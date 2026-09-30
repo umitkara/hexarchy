@@ -57,18 +57,28 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
   src/commands/    Command birliği + validate/apply (Immer) → {state, events}; oyun bitince
                    her komut 'gameOver'; edges.ts buildEdge/breachEdge; ages.ts advanceAge;
                    history.ts tur içi geri al, legal.ts legalCommands (AI/fuzz için)
-  src/balance.ts   TÜM denge sayıları burada
+  src/ai/          Utility AI (GDD 12, karar 72): view.ts analyze = adım başı analiz (tehdit/koruma
+                   haritası, karo değeri, risk, bölge ekonomisi + çağ birikimi, kişilik);
+                   score.ts puanlar (riskDelta, takeGain, mergeFuture, buildScore, canFeed);
+                   turn.ts adaylar + aiStep/chooseCommand/playAiTurn (açgözlü, tur başı sınırlı)
+  src/balance.ts   TÜM denge sayıları burada (AI ağırlıkları: `AI` bölümü)
   src/rng.ts       tohumlu RNG — tüm rastgelelik buradan
   test/            Vitest testleri
   test/fixtures/   ASCII harita fikstürleri (format: ascii.ts başındaki yorum) + invariant'lar
+  test/aiMatch.ts  AI'ya karşı AI maç yardımcısı; aiSmoke1-5 = 50 tohumlu smoke testi (5 dosya,
+                   paralel koşsun diye); ai.test.ts AI birim testleri
 apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), kamera; dragDrop.ts panelden haritaya sürükleme
   src/ui/          React HUD (canvas üstünde overlay); AgePanel.tsx çağ düğmesi + paneli,
                    GameOver.tsx bitiş ekranı, Notice.tsx hata bildirimi + büyük haber bandı
   src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina/eylem =
-                   HandSource, sürükleme, hotseat, agePanelOpen, resultsHidden); komutlar
-                   `dispatch` ile; isDecided = oyun bitti ya da (AI'a karşı) insan elendi
+                   HandSource, sürükleme, hotseat (varsayılan kapalı = 3 AI'ya karşı),
+                   agePanelOpen, resultsHidden); komutlar `dispatch` ile (AI turunda reddedilir);
+                   isDecided = oyun bitti ya da (AI'a karşı) insan elendi; isAiTurn; stepAi/skipAi
+                   + aiTurn/aiFast/aiMove/aiTaken; news = haber kuyruğu (Notice)
+                   aiDriver.ts: AI turlarını zamanlayıcıyla adım adım oynatır (App'te başlar);
+                   ui/AiBanner.tsx "Oyuncu N oynuyor · Atla"; render/aiGraphics.ts AI vurguları
                    render/tileLayout.ts: merkez + bina + birim aynı karodaysa ikon yerleri
                    render/structureGraphics.ts kenar yapıları; kenar eylemlerinde (işçi yapısı,
                    kır) birimin kendi karosunda kenara yakın dokunuş o kenarı seçer (scene.ts)

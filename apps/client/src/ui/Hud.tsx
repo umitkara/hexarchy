@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { gameStore } from '../store/gameStore';
 import { ActionHint } from './ActionHint';
+import { AiBanner } from './AiBanner';
 import { AgePanel } from './AgePanel';
 import { DebugPanel } from './DebugPanel';
 import { GameOver } from './GameOver';
@@ -43,6 +44,7 @@ export function Hud() {
         <TurnPanel />
         <TileInfo />
         <AgePanel />
+        <AiBanner />
       </div>
       <Notice />
       <div className="hud-bottom">

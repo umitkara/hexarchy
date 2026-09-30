@@ -330,6 +330,8 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 - **Öncelikler:** ekonomi dengesi (bakım/gelir), tehdit altındaki sınırı savunma, **düşman bölgesini bölen karoya saldırı**, çağ zamanlaması, tarafsız genişleme.
 - **Zorluk:** tahmin derinliği + kaynak bonusu.
 
+**v0.1 uygulaması:** Tek adımlık (1-ply) açgözlü AI, bonussuz: insanla aynı kurallar ve kaynaklar. Her adımda aday komutları (kural fonksiyonlarından) puanlar (puan ≈ altın), en iyisini uygular; hiçbiri eşiği geçmezse turu bitirir. Puanlar: karonun değeri ve bölme etkisi, düşman başkenti (eleme), yakalanan bina, tehdit haritasına göre risk değişimi (rakibin sonraki turda o karoyu alabileceği en güçlü birim, korumaya karşı), üretim binaları için komşuluk verimi × bölgenin ihtiyacı, askerî binaların açtığı hatlar, çağ için başkent kasasında birikim. Açlık, tur başı tahminiyle önlenir (beslenemeyecek birim alınmaz/birleştirilmez). Malzeme geliri yokken üretici binaya yer ve malzeme ayrılır; pahalı hedef bina için birikim yapılır. Tüm ağırlıklar `balance.ts` `AI` bölümündedir; kişilik (saldırganlık/genişleme/temkin ±%15) tohumdan türer. Tur başına komut ve yer değiştirme sınırı vardır (sonsuz döngü yok).
+
 ---
 
 ## 13. Arayüz / UX
@@ -456,3 +458,8 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 | 69 | Oyun sonu | Tüm komutlar (debug dahil) reddedilir; geri alma kapanır | Oynamaya devam |
 | 70 | Bitiş istatistikleri | Temel tablo (toprak, birim, bina, çağ) her zaman; savaş/ekonomi/en geniş toprak "Detaylar" altında. Olaylardan sayılır, durumda saklanır; debug komutları sayılmaz (en geniş toprak her komutta güncellenir) | Yalnız kazanan; türetilmiş sayaçlar |
 | 71 | AI'a karşı elenme | Oyun insan için biter ("Elendin" ekranı); AI'lar arası devam simüle edilmez | AI'lar sonuca dek oynar |
+| 72 | AI zorluğu (v0.1) | Adil: bonussuz, aynı kurallar; 1 adımlık açgözlü utility AI; kişilik tohumdan (±%15) | Kaynak bonusu, derin arama |
+| 73 | Varsayılan mod | 3 AI'ya karşı (Oyuncu 1 insan); hotseat debug panelinde | Hotseat |
+| 74 | AI turunun gösterimi | Kısa aralıklarla hamle hamle oynar, son hamle haritada vurgulanır, AI'ların aldığı karolar sıra insana gelene dek işaretli; "Oyuncu N oynuyor · Atla" şeridi (Atla kalan AI turlarını beklemeden oynatır); AI oynarken insan komut veremez; kamera yerinde kalır, sıra insana dönünce başkente gider | Anında; kamera AI'yı izler |
+| 75 | Başlangıç ormanı | Her başlangıç toprağında en az 1 orman (yoksa kereste ocağı + kışla başlangıç malzemesini aşar, malzeme kilitlenmesi) | Ortalama kadar |
+| 76 | Başlangıç yerleri | Yalnızca en büyük kara parçasında (dere köprüyle geçilebilir sayılır; dağ ve suyla ayrılmış cepler aday değil) — v0.1'de gemi yok, adadaki oyuncuya ulaşılamaz | Her kara karosu |

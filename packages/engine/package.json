@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=60000",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json"
   },

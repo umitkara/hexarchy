@@ -78,6 +78,11 @@ export const MAP_GEN = {
     territoryRadius: 2,
     /** Minimum ownable land tiles within `fairRadius` of a capital (37 tiles in total). */
     minLand: 24,
+    /**
+     * Forests every starting territory gets at least: without one, no lumber camp yields and
+     * the starting materials cannot pay for both a lumber camp and a barracks.
+     */
+    minTerritoryForests: 1,
     /** Random restarts of the spread-out placement search; the best one wins. */
     attempts: 64,
     /** Placement score = min capital distance − weights × spread (max − min) of these counts. */
@@ -519,3 +524,125 @@ export const COUNTER_BONUS: Readonly<Partial<Record<UnitLine, Partial<Record<Uni
     infantry: { cavalry: 1 },
     cavalry: { archer: 1, siege: 1 },
   };
+
+/**
+ * Utility AI (GDD 12, PLAN M7) [DRAFT]: every candidate command gets a score in points —
+ * roughly gold-equivalents — and the best one is played, until none scores `minScore`.
+ * Values are what gaining (or losing) something is worth; weights scale costs and risks.
+ */
+export const AI = {
+  /** Loop guards: an AI turn ends after this many commands, whatever is left to do. */
+  maxCommandsPerTurn: 80,
+  /** Moves within own land exhaust nothing; at most this many per turn. */
+  maxRepositionsPerTurn: 12,
+  /** The best candidate must score at least this, or the AI ends its turn. */
+  minScore: 0.5,
+  /** Personalities: each AI scales aggression, expansion and caution by 1 ± this (seeded). */
+  personalitySpread: 0.15,
+
+  /** Worth of owning a tile: per gold it yields per turn, and extras. */
+  tile: {
+    perGold: 5,
+    /** Forests yield no gold but feed lumber camps and keep options open. */
+    forest: 2,
+    /** A hill with an ore vein (gold mine site). */
+    vein: 3,
+    /** Per own neighbor of a captured tile: compact land is easier to hold. */
+    compact: 0.3,
+    /** Joining two own regions into one treasury, plus per tile of the smaller ones. */
+    join: 4,
+    joinPerTile: 0.5,
+  },
+  /** Worth of a unit per level (a worker counts as `worker`). */
+  unitPerLevel: 8,
+  worker: 4,
+  /** Worth of a building: its materials cost times this. */
+  buildingPerMaterial: 1,
+  /** Losing a local center: its treasury times this, plus per tile of its region. */
+  centerTreasury: 0.3,
+  centerPerTile: 1,
+  /** Losing the capital means elimination. */
+  capital: 400,
+  /** Per tile cut off from its region's center by losing a tile (split, GDD 12). */
+  splitPerTile: 2,
+  /** Taking an enemy capital (it eliminates them). */
+  eliminate: 400,
+  /** Enemy losses count this much of an own gain. */
+  harm: 0.7,
+  /** An own tile an enemy could take next turn loses this share of its worth. */
+  risk: 0.6,
+
+  /** Spending: points per gold (buying) and per material (building, structures). */
+  goldSpend: 0.5,
+  materialSpend: 1,
+  /** Per food of extra upkeep each turn (GDD 4.4). */
+  upkeep: 2,
+  /** A bought fighter keeps capturing on later turns. */
+  newUnit: 3,
+  /** Turns of food deficit a region may run on its stock before refusing more upkeep. */
+  foodLookahead: 3,
+  /** Merging: share of the best target the merged level newly opens up (next turn). */
+  mergeFuture: 0.5,
+  /** Buying a unit to merge with a second one (no own fighter nearby): share of `mergeFuture`. */
+  muster: 0.6,
+  /** Stocks above `stock` are spent at a discount (rich / stock), down to `floor`. */
+  wealth: { stock: 80, floor: 0.2 },
+  /** Per ready unit used up by a merge (it cannot act again this turn). */
+  actionLoss: 2,
+  /** Moving within own land to defend: a small cost, so pointless moves are not made. */
+  reposition: 0.2,
+
+  /** Per resource yielded per turn, times `buildHorizon` turns. */
+  buildHorizon: 5,
+  /**
+   * A region saves materials for a building it cannot yet afford: per turn of saving its
+   * value is discounted by this factor; cheaper builds must beat the discounted value.
+   */
+  savingDiscount: 0.9,
+  goldPerTurn: 1,
+  /** Food per turn is worth more while a region's food balance (after upkeep) is low. */
+  food: { deficit: 3, low: 2, surplus: 0.4, comfortNet: 4 },
+  /** Materials per turn are worth more while a region yields few. */
+  materials: { none: 5, low: 1.5, plenty: 0.6, plentyIncome: 3 },
+  /** A captured tile next to an own farm, lumber camp or quarry: per extra resource per turn. */
+  neighborYieldTurns: 2,
+  /** Military buildings (the region has none of the kind yet). */
+  barracks: 30,
+  archeryRange: 10,
+  stable: 6,
+  workshop: 6,
+  /** A non-production building on a tile that would suit a farm: per food it could yield. */
+  farmSiteLoss: 1,
+  /** Regions smaller than this get military buildings at a third of their value. */
+  militaryMinTiles: 6,
+
+  /** Age timing (GDD 9.1): the capital region saves up the price once it is ready. */
+  age: {
+    advance: 120,
+    saveFromRound: 5,
+    minTiles: 12,
+    /** Food and materials are worth this much more in the capital region while saving. */
+    savingBoost: 2,
+  },
+  /** Defending moves this valuable may spend the age savings. */
+  emergency: 40,
+
+  /** Edge structures (GDD 5.3): bridges joining own regions or opening a crossing. */
+  bridgeJoin: 10,
+  bridgeOpen: 1.5,
+  /** A bridge toward land to take: this share of the gain of taking the tile across. */
+  bridgeReach: 0.5,
+  /** Fences and walls block own attacks across their edge too. */
+  fenceOffense: 1,
+  /** Upgrading a fence to a wall where enemies could break fences (Sv3+). */
+  wall: 4,
+  /** A worker walking to a structure site: this share of the structure's score. */
+  workerTravel: 0.9,
+  /** Buying a worker for a structure (the region has none): this much is deducted. */
+  workerNeed: 4,
+  /** A volley that lets an own unit take a tile: this share of the take. */
+  volleyFollow: 0.8,
+  /** Striking an enemy structure; more if an enemy capital is within 2 tiles. */
+  breach: 3,
+  breachCapital: 8,
+} as const;

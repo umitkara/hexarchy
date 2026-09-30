@@ -538,6 +538,14 @@ body {
   color: var(--text-dim);
 }
 
+/* While the AI plays: whose turn it is, and the skip button. */
+.ai-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
 /* Short messages in the middle of the map: news above, refusals below. */
 .notices {
   position: absolute;

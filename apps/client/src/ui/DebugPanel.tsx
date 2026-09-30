@@ -33,7 +33,7 @@ function mapStats(map: GameMap) {
 const OPEN_BY_DEFAULT_MIN_WIDTH = 700;
 
 /**
- * Debug tools: hotseat, the current player's age (level cap), new game by seed, "paint tile"
+ * Debug tools: hotseat (off: the AI plays players 2-4), the current player's age (level cap), new game by seed, "paint tile"
  * mode (splits/merges), event log.
  */
 export function DebugPanel() {
@@ -92,7 +92,7 @@ export function DebugPanel() {
           type="button"
           className={hotseat ? 'hud-button' : 'hud-button hud-button-secondary'}
           aria-pressed={hotseat}
-          title="Açık: her oyuncuyu sırayla sen oynarsın. Kapalı: AI oyuncular pas geçer."
+          title="Açık: her oyuncuyu sırayla sen oynarsın. Kapalı: diğer oyuncuları AI oynar."
           onClick={() => {
             setHotseat(!hotseat);
           }}

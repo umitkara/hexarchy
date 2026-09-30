@@ -15,6 +15,7 @@ import { Container, Graphics, type Application } from 'pixi.js';
 import { attachCameraControls, type DragHandler } from '../input/cameraControls';
 import { registerMapPicker } from '../input/dragDrop';
 import { canControl, gameStore, isEdgeSource, type GameStoreState } from '../store/gameStore';
+import { drawAiMoves } from './aiGraphics';
 import { Camera } from './camera';
 import { drawBuildings } from './buildingGraphics';
 import { createLayers } from './layers';
@@ -87,10 +88,11 @@ export function createScene(app: Application): () => void {
   layers.buildings.addChild(centers, buildings);
   const units = new Graphics();
   layers.units.addChild(units);
+  const aiMoves = new Graphics();
   const targets = new Graphics();
   const selection = new Graphics();
   const hover = new Graphics();
-  layers.highlights.addChild(targets, selection, hover);
+  layers.highlights.addChild(aiMoves, targets, selection, hover);
   // Screen-space overlay above the world: not scaled by the camera.
   const preview = new ShieldPreview();
   app.stage.addChild(preview.container);
@@ -136,6 +138,7 @@ export function createScene(app: Application): () => void {
   drawStructures(structures, initial.game);
   drawUnits(units, initial.game, null);
   drawSelection(selection, initial.game, initial.selectedTile);
+  drawAiMoves(aiMoves, initial.game, initial.aiTaken, initial.aiMove);
   drawHover(hover, initial.game.map, initial.hoveredTile, edgeFrom(initial));
   renderPreview();
 
@@ -164,6 +167,9 @@ export function createScene(app: Application): () => void {
     if (game !== old || activeSource(state) !== activeSource(previous)) {
       drawTargets(targets, game, activeSource(state));
     }
+    if (state.aiTaken !== previous.aiTaken || state.aiMove !== previous.aiMove) {
+      drawAiMoves(aiMoves, game, state.aiTaken, state.aiMove);
+    }
     if (territoryChanged || state.selectedTile !== previous.selectedTile) {
       drawSelection(selection, game, state.selectedTile);
     }
@@ -182,8 +188,11 @@ export function createScene(app: Application): () => void {
     ) {
       renderPreview();
     }
-    // Hotseat: follow the player on turn.
-    if (game.map === old.map && game.currentPlayer !== old.currentPlayer) centerOnCapital(game);
+    // Hotseat: follow the player on turn. Against the AI the camera stays put while it
+    // plays and comes back to the human's capital on their turn.
+    if (game.map === old.map && game.currentPlayer !== old.currentPlayer && canControl(state)) {
+      centerOnCapital(game);
+    }
   });
 
   /**

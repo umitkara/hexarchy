@@ -4,20 +4,28 @@ import { announceEvent, COMMAND_ERROR_LABELS, QUIET_ERRORS } from './labels';
 
 const NOTICE_MS = 2500;
 const NEWS_MS = 4000;
+/** Lines of news shown at once (the AI may bring several in a row). */
+const NEWS_LINES = 4;
 
 /**
- * Short-lived messages: why a command was refused, and the big news of the last one (an
- * age advance, an elimination, the victory).
+ * Short-lived messages: why a command was refused, and the big news (an age advance, an
+ * elimination, the victory). News queues up while the AI plays and fades a while after
+ * the last line came in.
  */
 export function Notice() {
   const lastError = useGameStore((s) => s.lastError);
-  const lastEvents = useGameStore((s) => s.lastEvents);
+  const news = useGameStore((s) => s.news);
   const [hiddenId, setHiddenId] = useState<number | null>(null);
-  const [hiddenEvents, setHiddenEvents] = useState<readonly unknown[] | null>(null);
-  const news = useMemo(
-    () => lastEvents.map(announceEvent).filter((line) => line !== null),
-    [lastEvents],
+  const [newsHiddenUpTo, setNewsHiddenUpTo] = useState(0);
+  const lines = useMemo(
+    () =>
+      news.flatMap((item) => {
+        const text = announceEvent(item.event);
+        return text === null ? [] : [{ id: item.id, text }];
+      }),
+    [news],
   );
+  const lastLine = lines.at(-1)?.id ?? 0;
 
   useEffect(() => {
     if (!lastError) return;
@@ -30,27 +38,27 @@ export function Notice() {
   }, [lastError]);
 
   useEffect(() => {
-    if (lastEvents.length === 0) return;
+    if (lastLine === 0) return;
     const timer = window.setTimeout(() => {
-      setHiddenEvents(lastEvents);
+      setNewsHiddenUpTo(lastLine);
     }, NEWS_MS);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [lastEvents]);
+  }, [lastLine]);
 
   const error =
     lastError && lastError.id !== hiddenId && !QUIET_ERRORS.has(lastError.error)
       ? COMMAND_ERROR_LABELS[lastError.error]
       : null;
-  const showNews = news.length > 0 && hiddenEvents !== lastEvents;
-  if (!error && !showNews) return null;
+  const shown = lines.filter((line) => line.id > newsHiddenUpTo).slice(-NEWS_LINES);
+  if (!error && shown.length === 0) return null;
   return (
     <div className="notices">
-      {showNews && (
+      {shown.length > 0 && (
         <div className="news" role="status">
-          {news.map((line, i) => (
-            <p key={i}>{line}</p>
+          {shown.map((line) => (
+            <p key={line.id}>{line.text}</p>
           ))}
         </div>
       )}
