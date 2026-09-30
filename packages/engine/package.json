@@ -14,5 +14,8 @@
   },
   "devDependencies": {
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "immer": "^11.1.18"
   }
 }

@@ -11,7 +11,9 @@ export function getEngineInfo(): EngineInfo {
 }
 
 export * from './balance';
+export * from './commands';
 export * from './hex';
 export * from './map';
 export * from './rng';
+export * from './rules';
 export * from './state';

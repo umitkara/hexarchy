@@ -39,14 +39,18 @@ Tek paket için: `pnpm --filter @hexarchy/engine test:watch`.
 ```
 packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir, build adımı yok)
   src/hex, map, state, rules, commands, ai/   (PLAN.md 2.1)
+  src/state/game.ts   GameState (düz JSON); src/state/setup.ts createGame
+  src/rules/       saf kural fonksiyonları (bölgeler, merkezler, ekonomi, tur); draft üzerinde
+  src/commands/    Command birliği + validate/apply (Immer) → {state, events}
   src/balance.ts   TÜM denge sayıları burada
   src/rng.ts       tohumlu RNG — tüm rastgelelik buradan
-  test/            Vitest testleri (+ ileride ASCII harita fikstürleri)
+  test/            Vitest testleri
+  test/fixtures/   ASCII harita fikstürleri (format: ascii.ts başındaki yorum) + invariant'lar
 apps/client/       @hexarchy/client — Vite + React + PixiJS
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), sürükle-bırak
   src/ui/          React HUD (canvas üstünde overlay)
-  src/store/       oyun durumu köprüsü (zustand; M1: harita + hover)
+  src/store/       gameStore (zustand): GameState + UI durumu; komutlar `dispatch` ile
 ```
 
 ## Mimari sınır kuralı (ihlal edilemez)

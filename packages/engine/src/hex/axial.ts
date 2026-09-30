@@ -111,3 +111,22 @@ export function hexagonCoords(radius: number): Axial[] {
   }
   return coords;
 }
+
+/**
+ * Offset ("odd-r") coordinates to axial: rows are r, odd rows are shifted half a tile right.
+ * Used by rectangular maps (test fixtures), whose rows read naturally as text lines.
+ */
+export function offsetToAxial(col: number, row: number): Axial {
+  return axial(col - (row - (row & 1)) / 2, row);
+}
+
+/**
+ * All hexes of a `width` × `height` odd-r rectangle, row-major: index = row · width + col.
+ */
+export function rectangleCoords(width: number, height: number): Axial[] {
+  const coords: Axial[] = [];
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) coords.push(offsetToAxial(col, row));
+  }
+  return coords;
+}

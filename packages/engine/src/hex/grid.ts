@@ -4,6 +4,7 @@ import {
   axialNeighbor,
   DIRECTIONS,
   hexagonCoords,
+  rectangleCoords,
   type Axial,
   type Direction,
 } from './axial';
@@ -134,6 +135,19 @@ export function hexagonGrid(radius: number): HexGrid {
   if (!grid) {
     grid = new HexGrid(hexagonCoords(radius));
     hexagonGridCache.set(radius, grid);
+  }
+  return grid;
+}
+
+const rectangleGridCache = new Map<string, HexGrid>();
+
+/** Odd-r rectangle grid (memoized). Index = row · width + col. */
+export function rectangleGrid(width: number, height: number): HexGrid {
+  const key = `${width}x${height}`;
+  let grid = rectangleGridCache.get(key);
+  if (!grid) {
+    grid = new HexGrid(rectangleCoords(width, height));
+    rectangleGridCache.set(key, grid);
   }
   return grid;
 }

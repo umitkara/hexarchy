@@ -1,5 +1,5 @@
 import type { EdgeKey } from '../hex/edge';
-import { hexagonGrid, type HexGrid } from '../hex/grid';
+import { hexagonGrid, rectangleGrid, type HexGrid } from '../hex/grid';
 
 /**
  * Map part of the game state. Plain, serializable JSON: no classes, no Maps.
@@ -37,10 +37,13 @@ export interface EdgeFeature {
   readonly kind: EdgeKind;
 }
 
-export interface MapShape {
-  readonly kind: 'hexagon';
-  readonly radius: number;
-}
+/**
+ * Grid shape. Generated maps are hexagons; rectangles (odd-r offset rows) serve the ASCII
+ * rule-test fixtures.
+ */
+export type MapShape =
+  | { readonly kind: 'hexagon'; readonly radius: number }
+  | { readonly kind: 'rectangle'; readonly width: number; readonly height: number };
 
 export interface GameMap {
   /** Seed the map was generated from. */
@@ -54,5 +57,18 @@ export interface GameMap {
 
 /** The (memoized) grid of a map. */
 export function mapGrid(map: Pick<GameMap, 'shape'>): HexGrid {
-  return hexagonGrid(map.shape.radius);
+  const { shape } = map;
+  return shape.kind === 'hexagon'
+    ? hexagonGrid(shape.radius)
+    : rectangleGrid(shape.width, shape.height);
+}
+
+export function sameShape(a: MapShape, b: MapShape): boolean {
+  if (a.kind === 'hexagon') return b.kind === 'hexagon' && a.radius === b.radius;
+  return b.kind === 'rectangle' && a.width === b.width && a.height === b.height;
+}
+
+/** Tiles that can be owned: land that is not an impassable mountain (GDD 3.1). */
+export function isOwnable(terrain: Terrain): boolean {
+  return terrain === 'plains' || terrain === 'forest' || terrain === 'hill';
 }

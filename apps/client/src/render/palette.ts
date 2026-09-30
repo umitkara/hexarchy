@@ -28,6 +28,29 @@ export const PALETTE = {
   ford: 0xa9d8f2,
   fordStone: 0xe6dcc0,
   hover: 0xffffff,
+  selection: 0xffffff,
+  /** Dark outline of center icons. */
+  iconOutline: 0x1d1a16,
+  /** Light body of center icons (walls, roofs are in the player color). */
+  iconStone: 0xf1ead8,
 } as const;
+
+/**
+ * Player colors, by player id. Saturated and far apart in hue so they read over the
+ * mid-toned terrain and next to each other (red, blue, purple, orange).
+ */
+export const PLAYER_COLORS: readonly number[] = [0xe0443a, 0x2f7de1, 0x9b55d8, 0xf08a1c];
+
+/** Territory fill opacity over the terrain. */
+export const TERRITORY_FILL_ALPHA = 0.42;
+
+export function playerColor(player: number): number {
+  return PLAYER_COLORS[player % PLAYER_COLORS.length] ?? 0xffffff;
+}
+
+/** A Pixi color number as a CSS hex color. */
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
 
 export const BACKGROUND_COLOR = PALETTE.seaDepths[2];

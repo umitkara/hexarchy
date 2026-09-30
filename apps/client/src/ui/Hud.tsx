@@ -1,5 +1,8 @@
 import { DebugPanel } from './DebugPanel';
+import { Notice } from './Notice';
+import { RegionPanel } from './RegionPanel';
 import { TileInfo } from './TileInfo';
+import { TurnPanel } from './TurnPanel';
 
 /** React HUD overlay on top of the Pixi canvas. */
 export function Hud() {
@@ -9,9 +12,14 @@ export function Hud() {
         <header className="hud-panel">
           <h1 className="hud-title">Hexarchy</h1>
         </header>
+        <TurnPanel />
         <TileInfo />
       </div>
-      <DebugPanel />
+      <Notice />
+      <div className="hud-bottom">
+        <DebugPanel />
+        <RegionPanel />
+      </div>
     </div>
   );
 }
