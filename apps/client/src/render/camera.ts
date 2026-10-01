@@ -42,6 +42,11 @@ export class Camera {
     return this.#zoom;
   }
 
+  /** The world point at the screen center. */
+  get center(): Point {
+    return { x: this.#x, y: this.#y };
+  }
+
   setViewport(width: number, height: number): void {
     this.#viewWidth = Math.max(1, width);
     this.#viewHeight = Math.max(1, height);

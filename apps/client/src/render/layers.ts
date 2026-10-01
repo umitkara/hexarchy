@@ -10,6 +10,7 @@ export const LAYER_ORDER = [
   'edges',
   'buildings',
   'units',
+  'effects',
   'highlights',
 ] as const;
 

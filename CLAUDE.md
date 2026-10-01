@@ -27,12 +27,15 @@ Gereksinimler: Node >= 22.12, pnpm 11.
 | `pnpm install`   | Bağımlılıkları kurar                               |
 | `pnpm dev`       | Client dev sunucusu (Vite) — http://localhost:5173 |
 | `pnpm build`     | Client üretim derlemesi (`apps/client/dist`)       |
-| `pnpm test`      | Tüm Vitest testleri (şimdilik engine)              |
+| `pnpm test`      | Tüm Vitest testleri (engine)                       |
 | `pnpm lint`      | ESLint (type-aware) + Prettier kontrolü            |
 | `pnpm format`    | Prettier ile tüm dosyaları biçimlendirir           |
 | `pnpm typecheck` | Tüm paketlerde `tsc`                               |
 
 Tek paket için: `pnpm --filter @hexarchy/engine test:watch`.
+
+Yayın: `main`e her push `.github/workflows/deploy.yml` ile denetlenip GitHub Pages'e çıkar —
+https://umitkara.github.io/hexarchy/. `?debug` debug panelini açar, `?seed=N` menünün tohumunu doldurur.
 
 ## Yapı
 
@@ -65,21 +68,34 @@ packages/engine/   @hexarchy/engine — saf TS oyun motoru (kaynaktan tüketilir
   src/rng.ts       tohumlu RNG — tüm rastgelelik buradan
   test/            Vitest testleri
   test/fixtures/   ASCII harita fikstürleri (format: ascii.ts başındaki yorum) + invariant'lar
-  test/aiMatch.ts  AI'ya karşı AI maç yardımcısı; aiSmoke1-5 = 50 tohumlu smoke testi (5 dosya,
-                   paralel koşsun diye); ai.test.ts AI birim testleri
-apps/client/       @hexarchy/client — Vite + React + PixiJS
+  test/aiMatch.ts  AI'ya karşı AI maç yardımcısı (oyuncu sayısı seçilebilir); aiSmoke1-5 = 50
+                   tohumlu smoke testi (5 dosya, paralel koşsun diye); ai.test.ts AI birim
+                   testleri; save.test.ts kayıt (JSON gidiş-dönüş) + 2-3 oyunculu oyunlar
+apps/client/       @hexarchy/client — Vite + React + PixiJS (base './': GitHub Pages alt yolu)
   src/render/      Pixi: uygulama, sahne, katmanlar, kamera (imperatif, React dışında)
   src/input/       pointer (fare + dokunmatik), kamera; dragDrop.ts panelden haritaya sürükleme
   src/ui/          React HUD (canvas üstünde overlay); AgePanel.tsx çağ düğmesi + paneli,
-                   GameOver.tsx bitiş ekranı, Notice.tsx hata bildirimi + büyük haber bandı
+                   GameOver.tsx bitiş ekranı, Notice.tsx hata bildirimi + büyük haber bandı,
+                   Menu.tsx ana menü (devam et, yeni oyun: tohum + AI sayısı, ses),
+                   Encyclopedia.tsx ansiklopedi (sayılar balance.ts'den); DebugPanel yalnızca
+                   ?debug ile (src/debug.ts)
+  src/audio/       sound.ts: WebAudio sentez sesler, komut başına bir ses (feed'den), sessize alma
+                   ayarı
   src/store/       gameStore (zustand): TurnHistory + UI durumu (seçim, eldeki birim/bina/eylem =
                    HandSource, sürükleme, hotseat (varsayılan kapalı = 3 AI'ya karşı),
-                   agePanelOpen, resultsHidden); komutlar `dispatch` ile (AI turunda reddedilir);
+                   agePanelOpen, resultsHidden, menuOpen/helpOpen, started, settings); komutlar
+                   `dispatch` ile (AI turunda reddedilir), turun komutları `commands`'ta, son
+                   komutun olayları `feed`'de (animasyon + ses);
                    isDecided = oyun bitti ya da (AI'a karşı) insan elendi; isAiTurn; stepAi/skipAi
                    + aiTurn/aiFast/aiMove/aiTaken; news = haber kuyruğu (Notice)
-                   aiDriver.ts: AI turlarını zamanlayıcıyla adım adım oynatır (App'te başlar);
+                   aiDriver.ts: AI turlarını zamanlayıcıyla adım adım oynatır (App'te başlar;
+                   menü açıkken bekler); save.ts localStorage kaydı (tur başı durumu + turun
+                   komutları, yüklerken yeniden oynatılır → geri alma korunur) + ayarlar;
+                   autosave.ts her değişiklikte (gecikmeli) ve sayfa gizlenince kaydeder;
                    ui/AiBanner.tsx "Oyuncu N oynuyor · Atla"; render/aiGraphics.ts AI vurguları
                    render/tileLayout.ts: merkez + bina + birim aynı karodaysa ikon yerleri
+                   render/effects.ts olay animasyonları (kayma, belirme, karo parlaması, halka,
+                   ok, dalga); oynarken birimin karosu birim katmanından düşülür (hidden)
                    render/structureGraphics.ts kenar yapıları; kenar eylemlerinde (işçi yapısı,
                    kır) birimin kendi karosunda kenara yakın dokunuş o kenarı seçer (scene.ts)
 ```

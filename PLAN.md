@@ -156,7 +156,7 @@ Her kilometre taşı sonunda **oynanabilir bir sürüm** ve kullanıcı testi va
 - Mobil UX geçişi (dokunma hedefleri, dikey/yatay yerleşim).
 - Animasyonlar, basit ses (opsiyonel), basit ansiklopedi.
 - Denge geçişi (`balance.ts` + AI duman testi istatistikleri).
-- Statik hosting'e yayın (örn. GitHub Pages / Netlify / Vercel — M8'de karar).
+- Statik hosting'e yayın: GitHub Pages (açık repo, `main`e push → GitHub Actions; karar 83).
 - ✅ **Test:** Arkadaşlara link gönderilebilir, 15-30 dk'lık keyifli bir maç.
 
 ---

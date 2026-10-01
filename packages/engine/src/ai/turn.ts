@@ -498,12 +498,13 @@ function materialsPlan(view: AiView, economy: RegionEconomy): MaterialsPlan {
  * it must beat the goal it saves for and leave room for a missing materials producer.
  */
 /**
- * Materials a building may use: farms, lumber camps and quarries speed up the age savings,
- * so they may spend them; anything else only what is spendable.
+ * Materials a building may use: lumber camps and quarries speed up the age savings, and so
+ * do farms while the savings lack food, so they may spend them; anything else only what is
+ * spendable.
  */
 function availableFor(economy: RegionEconomy, building?: BuildingKind): number {
   const resource = building && BUILDINGS[building].yield?.resource;
-  return resource === 'food' || resource === 'materials'
+  return resource === 'materials' || (resource === 'food' && economy.shortfall.food > 0)
     ? economy.treasury.materials
     : economy.spendable.materials;
 }

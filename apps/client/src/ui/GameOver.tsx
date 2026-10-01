@@ -7,7 +7,7 @@ import {
   type PlayerStats,
 } from '@hexarchy/engine';
 import { useState, type ReactNode } from 'react';
-import { isDecided, randomSeed, useGameStore } from '../store/gameStore';
+import { isDecided, useGameStore } from '../store/gameStore';
 import { AGE_SHORT_LABELS, playerName, RESOURCE_LABELS } from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
 
@@ -79,7 +79,7 @@ export function GameOver() {
   const decided = useGameStore(isDecided);
   const hidden = useGameStore((s) => s.resultsHidden);
   const setHidden = useGameStore((s) => s.setResultsHidden);
-  const newGame = useGameStore((s) => s.newGame);
+  const setMenuOpen = useGameStore((s) => s.setMenuOpen);
   const [details, setDetails] = useState(false);
   if (!decided || hidden) return null;
 
@@ -195,7 +195,7 @@ export function GameOver() {
             type="button"
             className="hud-button"
             onClick={() => {
-              newGame(randomSeed());
+              setMenuOpen(true);
             }}
           >
             Yeni oyun

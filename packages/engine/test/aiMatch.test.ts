@@ -4,7 +4,8 @@ import { playAiMatch } from './aiMatch';
 
 describe('AI matches', () => {
   it('end with a winner', () => {
-    const { state } = playAiMatch(7, 60, false);
+    // A short match (18 rounds) keeps the suite fast; aiSmoke covers 50 seeds.
+    const { state } = playAiMatch(10, 60, false);
     expect(winnerOf(state)).not.toBeNull();
   });
 

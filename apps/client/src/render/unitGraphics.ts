@@ -145,23 +145,31 @@ export function drawUnitToken(
   }
 }
 
+const NONE: ReadonlySet<number> = new Set();
+
 /**
- * All units; `hidden` (a unit being dragged) is drawn as a faint placeholder. Hungry units
- * carry a minus mark (GDD 4.5: one strength less), units under a volley an arrow (GDD 7.3).
+ * All units; `lifted` (a unit being dragged) is drawn as a faint placeholder, `hidden` ones
+ * (being animated, see effects.ts) not at all. Hungry units carry a minus mark (GDD 4.5:
+ * one strength less), units under a volley an arrow (GDD 7.3).
  */
-export function drawUnits(g: Graphics, game: GameState, hidden: number | null): void {
+export function drawUnits(
+  g: Graphics,
+  game: GameState,
+  lifted: number | null,
+  hidden: ReadonlySet<number> = NONE,
+): void {
   const grid = mapGrid(game.map);
   g.clear();
   for (const tile of unitTiles(game)) {
     const unit = game.units[tile];
     const owner = game.owners[tile];
-    if (!unit || owner === undefined || owner === null) continue;
+    if (!unit || owner === undefined || owner === null || hidden.has(tile)) continue;
     const slot = tileLayout(game, tile, axialToPixel(grid.coord(tile), TILE_SIZE)).unit;
     if (!slot) continue;
     const size = TILE_SIZE * slot.scale;
-    const faded = tile === hidden ? 0.25 : unit.exhausted && owner === game.currentPlayer ? 0.5 : 1;
+    const faded = tile === lifted ? 0.25 : unit.exhausted && owner === game.currentPlayer ? 0.5 : 1;
     drawUnitToken(g, slot.point, size, unit, playerColor(owner), faded);
-    if (tile === hidden) continue;
+    if (tile === lifted) continue;
     if (unit.hungry) drawStatusMark(g, slot.point, size, 'hungry');
     if (unit.suppressed) drawStatusMark(g, slot.point, size, 'suppressed');
   }

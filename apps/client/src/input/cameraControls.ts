@@ -210,12 +210,19 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
     camera.zoomAt(local(event), Math.min(2, Math.max(0.5, factor)));
   };
 
+  // A tap may open a panel right under the finger (the region panel): without this, the
+  // browser's compatibility click after the touch lands on that panel (its close button).
+  const onTouchEnd = (event: TouchEvent) => {
+    if (event.cancelable) event.preventDefault();
+  };
+
   element.addEventListener('pointerdown', onPointerDown);
   element.addEventListener('pointermove', onPointerMove);
   element.addEventListener('pointerup', onPointerUp);
   element.addEventListener('pointercancel', onPointerUp);
   element.addEventListener('pointerleave', onPointerLeave);
   element.addEventListener('wheel', onWheel, { passive: false });
+  element.addEventListener('touchend', onTouchEnd, { passive: false });
 
   return () => {
     stopInertia();
@@ -226,5 +233,6 @@ export function attachCameraControls(options: CameraControlsOptions): () => void
     element.removeEventListener('pointercancel', onPointerUp);
     element.removeEventListener('pointerleave', onPointerLeave);
     element.removeEventListener('wheel', onWheel);
+    element.removeEventListener('touchend', onTouchEnd);
   };
 }

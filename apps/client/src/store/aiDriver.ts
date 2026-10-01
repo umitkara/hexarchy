@@ -13,7 +13,7 @@ function delayOf(state: GameStoreState): number {
 /**
  * Plays the AI players' turns as a quick animation (GDD 12): one command per timer tick,
  * so every move shows on the map; skipping (`aiFast`) plays on without pauses. Runs
- * whenever an AI player is on turn and hotseat is off. Returns the stop function.
+ * whenever an AI player is on turn and hotseat is off, unless a menu is open. Returns the stop function.
  */
 export function startAiDriver(): () => void {
   let timer: number | undefined;
@@ -21,7 +21,8 @@ export function startAiDriver(): () => void {
   const schedule = () => {
     if (timer !== undefined) return;
     const state = gameStore.getState();
-    if (!isAiTurn(state)) return;
+    // The AI waits while the menu or the encyclopedia is open.
+    if (!isAiTurn(state) || state.menuOpen || state.helpOpen) return;
     timer = window.setTimeout(tick, delayOf(state));
   };
 

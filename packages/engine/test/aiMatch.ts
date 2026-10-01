@@ -15,8 +15,8 @@ export interface AiMatch {
  * played. With `check`, every command must be valid, the invariants must hold after every
  * turn, and every turn must end within the AI's command limit.
  */
-export function playAiMatch(seed: number, rounds: number, check = true): AiMatch {
-  let state = createGame({ seed });
+export function playAiMatch(seed: number, rounds: number, check = true, players?: number): AiMatch {
+  let state = createGame({ seed, ...(players !== undefined && { players }) });
   let turn: AiTurn | undefined;
   let turnCommands = 0;
   const commands: Command[] = [];

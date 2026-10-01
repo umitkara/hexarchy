@@ -377,7 +377,7 @@ export const BUILDINGS = {
     terrain: ['plains', 'hill'],
     vein: false,
     nextToForest: true,
-    yield: { resource: 'materials', base: 0, neighbors: { forest: { amount: 1, owned: true } } },
+    yield: { resource: 'materials', base: 1, neighbors: { forest: { amount: 1, owned: true } } },
     protection: 0,
   },
   quarry: {
@@ -494,7 +494,7 @@ export const AGE_ADVANCE = {
   lastAge: 'feudal' satisfies Age,
   /** Price of reaching each age. */
   cost: {
-    feudal: { gold: 50, food: 30, materials: 20 },
+    feudal: { gold: 40, food: 20, materials: 15 },
     castle: { gold: 120, food: 80, materials: 60 },
     imperial: { gold: 250, food: 150, materials: 120 },
   } satisfies Readonly<Record<Exclude<Age, 'dark'>, Resources>>,
@@ -609,8 +609,8 @@ export const AI = {
   /** Military buildings (the region has none of the kind yet). */
   barracks: 30,
   archeryRange: 10,
-  stable: 6,
-  workshop: 6,
+  stable: 30,
+  workshop: 20,
   /** A non-production building on a tile that would suit a farm: per food it could yield. */
   farmSiteLoss: 1,
   /** Regions smaller than this get military buildings at a third of their value. */
@@ -619,8 +619,8 @@ export const AI = {
   /** Age timing (GDD 9.1): the capital region saves up the price once it is ready. */
   age: {
     advance: 120,
-    saveFromRound: 5,
-    minTiles: 12,
+    saveFromRound: 4,
+    minTiles: 9,
     /** Food and materials are worth this much more in the capital region while saving. */
     savingBoost: 2,
   },

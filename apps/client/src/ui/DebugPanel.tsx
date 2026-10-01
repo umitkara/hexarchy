@@ -1,22 +1,8 @@
-import {
-  AGES,
-  hashString,
-  isLand,
-  normalizeSeed,
-  type Age,
-  type GameMap,
-  type PlayerId,
-} from '@hexarchy/engine';
+import { AGES, isLand, type Age, type GameMap, type PlayerId } from '@hexarchy/engine';
 import { useMemo, useState } from 'react';
-import { randomSeed, useGameStore } from '../store/gameStore';
+import { useGameStore } from '../store/gameStore';
 import { AGE_LABELS, describeEvent, playerName } from './labels';
 import { PlayerSwatch } from './PlayerSwatch';
-
-/** Digits are used as-is; any other text is hashed, so words work as seeds too. */
-function parseSeed(text: string): number {
-  const trimmed = text.trim();
-  return normalizeSeed(/^\d+$/.test(trimmed) ? Number(trimmed) : hashString(trimmed));
-}
 
 function mapStats(map: GameMap) {
   const edges = Object.values(map.edges);
@@ -33,13 +19,13 @@ function mapStats(map: GameMap) {
 const OPEN_BY_DEFAULT_MIN_WIDTH = 700;
 
 /**
- * Debug tools: hotseat (off: the AI plays players 2-4), the current player's age (level cap), new game by seed, "paint tile"
- * mode (splits/merges), event log.
+ * Debug tools, shown with `?debug` in the address: hotseat (off: the AI plays the other
+ * players), the current player's age (level cap), "paint tile" mode (splits/merges), map
+ * statistics and the event log. New games are started from the menu.
  */
 export function DebugPanel() {
   const map = useGameStore((s) => s.game.map);
   const players = useGameStore((s) => s.game.players);
-  const newGame = useGameStore((s) => s.newGame);
   const painting = useGameStore((s) => s.painting);
   const paintOwner = useGameStore((s) => s.paintOwner);
   const setPainting = useGameStore((s) => s.setPainting);
@@ -51,17 +37,11 @@ export function DebugPanel() {
   const age = useGameStore((s) => s.game.players[s.game.currentPlayer]?.age);
   const dispatch = useGameStore((s) => s.dispatch);
   const [open, setOpen] = useState(() => window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH);
-  const [seedText, setSeedText] = useState(() => String(map.seed));
   const stats = useMemo(() => mapStats(map), [map]);
   const log = useMemo(
     () => lastEvents.map(describeEvent).filter((line) => line !== null),
     [lastEvents],
   );
-
-  const restart = (seed: number) => {
-    setSeedText(String(seed));
-    newGame(seed);
-  };
 
   const brushes: (PlayerId | null)[] = [...players.map((p) => p.id), null];
 
@@ -140,43 +120,9 @@ export function DebugPanel() {
             </select>
           </label>
 
-          <form
-            className="debug-row"
-            onSubmit={(event) => {
-              event.preventDefault();
-              restart(parseSeed(seedText));
-            }}
-          >
-            <label className="seed-field">
-              <span className="hud-label">Tohum</span>
-              <input
-                className="hud-input"
-                value={seedText}
-                inputMode="numeric"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(event) => {
-                  setSeedText(event.target.value);
-                }}
-              />
-            </label>
-            <button type="submit" className="hud-button">
-              Yeni oyun
-            </button>
-            <button
-              type="button"
-              className="hud-button hud-button-secondary"
-              onClick={() => {
-                restart(randomSeed());
-              }}
-            >
-              Rastgele
-            </button>
-          </form>
-
           <p className="hud-meta debug-stats">
-            {stats.land} kara · {stats.lakes} göl · {stats.rivers} dere · {stats.fords} geçit ·{' '}
-            {stats.veins} damar
+            Tohum {map.seed} · {stats.land} kara · {stats.lakes} göl · {stats.rivers} dere ·{' '}
+            {stats.fords} geçit · {stats.veins} damar
           </p>
 
           {log.length > 0 && (

@@ -26,6 +26,7 @@ import {
 } from '@hexarchy/engine';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
+import { loadGame, loadSettings, saveSettings, type Settings } from './save';
 
 /**
  * What the player holds to use on the map: a unit (moved or recruited), a building, or a
@@ -67,6 +68,20 @@ export interface HandDrag {
  */
 export interface GameStoreState {
   readonly history: TurnHistory;
+  /** Commands of the current turn, in order (a save replays them; undo pops them). */
+  readonly commands: readonly Command[];
+  /**
+   * The game was started or continued from the menu. Before that the map behind the menu
+   * is only a preview: it is not saved and the menu cannot be closed.
+   */
+  readonly started: boolean;
+  /** The main menu (continue, new game, encyclopedia, sound) is open; the AI waits. */
+  readonly menuOpen: boolean;
+  /** The encyclopedia is open (over the map or the menu); the AI waits. */
+  readonly helpOpen: boolean;
+  readonly settings: Settings;
+  /** The events of the latest command, for animations and sounds. */
+  readonly feed: EventFeed | null;
   /** Current game state (`history.present`). */
   readonly game: GameState;
   /** Tile under the mouse, the drag target, or the last tapped tile on touch screens. */
@@ -99,7 +114,12 @@ export interface GameStoreState {
   readonly lastEvents: readonly GameEvent[];
   /** Why the last command was refused; cleared by the next successful one. */
   readonly lastError: { readonly error: CommandError; readonly id: number } | null;
-  readonly newGame: (seed: number) => void;
+  readonly newGame: (options: NewGameOptions) => void;
+  /** Closes the menu and plays on (the loaded or the current game). */
+  readonly resume: () => void;
+  readonly setMenuOpen: (open: boolean) => void;
+  readonly setHelpOpen: (open: boolean) => void;
+  readonly setMuted: (muted: boolean) => void;
   /** Validates and applies a command; returns whether it was applied. */
   readonly dispatch: (command: Command) => boolean;
   /** Plays the AI's next command(s) (no-op unless an AI player is on turn); see aiDriver. */
@@ -124,6 +144,24 @@ export interface GameStoreState {
   readonly setResultsHidden: (hidden: boolean) => void;
 }
 
+export interface NewGameOptions {
+  readonly seed: number;
+  /** AI opponents (1-3); the human is player 1. */
+  readonly ais: number;
+}
+
+/** Most AI opponents: four players in all (one color each, PLAN 1). */
+export const MAX_AIS = 3;
+
+/** One command's events: who played it, and whether it was dropped by a drag. */
+export interface EventFeed {
+  readonly id: number;
+  readonly events: readonly GameEvent[];
+  readonly by: 'human' | 'ai';
+  /** Dropped by dragging: the unit is already where it lands, no slide. */
+  readonly dragged: boolean;
+}
+
 export interface AiMove {
   readonly player: PlayerId;
   readonly tiles: readonly number[];
@@ -144,10 +182,11 @@ export function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
 
-function initialSeed(): number {
+/** The `?seed=` of a shared link, if any. */
+export function urlSeed(): number | null {
   const param = new URLSearchParams(window.location.search).get(SEED_PARAM);
-  const seed = param === null ? NaN : Number(param);
-  return Number.isFinite(seed) ? normalizeSeed(seed) : randomSeed();
+  const seed = param === null || param.trim() === '' ? NaN : Number(param);
+  return Number.isFinite(seed) ? normalizeSeed(seed) : null;
 }
 
 /** Keeps `?seed=` in the address bar so a game can be reloaded or shared. */
@@ -261,16 +300,32 @@ function isMovableUnit(game: GameState, tile: number): boolean {
 
 let errorId = 0;
 let newsId = 0;
+let feedId = 0;
 
 /** Time budget of one skip slice: the rest waits for the next timer, so the page stays live. */
 const FAST_SLICE_MS = 40;
 
-const initialGame = createGame({ seed: initialSeed() });
+const initialSettings = loadSettings();
+const saved = loadGame();
+/** The saved game, or a preview of a new one behind the menu. */
+const initialHistory =
+  saved?.history ??
+  startHistory(createGame({ seed: urlSeed() ?? randomSeed(), players: initialSettings.ais + 1 }));
 
 export const gameStore = createStore<GameStoreState>()((set, get) => {
   const setHistory = (history: TurnHistory, extra: Partial<GameStoreState> = {}) => {
     set({ history, game: history.present, armed: null, drag: null, ...extra });
   };
+
+  /** The turn's commands after `command` (ending the turn starts a new list). */
+  const withCommand = (command: Command): readonly Command[] =>
+    command.type === 'endTurn' ? [] : [...get().commands, command];
+
+  const feedOf = (
+    events: readonly GameEvent[],
+    by: EventFeed['by'],
+    dragged = false,
+  ): EventFeed => ({ id: ++feedId, events, by, dragged });
 
   const withNews = (events: readonly GameEvent[]): readonly NewsItem[] => {
     const { news } = get();
@@ -291,6 +346,8 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     );
     const moves = commandTiles(state.game, command);
     setHistory(result.history, {
+      commands: withCommand(command),
+      feed: feedOf(result.events, 'ai'),
       aiTurn: command.type === 'endTurn' ? null : step.turn,
       aiMove: moves.length > 0 ? { player: state.game.currentPlayer, tiles: moves } : state.aiMove,
       aiTaken: taken.length > 0 ? [...state.aiTaken, ...taken] : state.aiTaken,
@@ -302,13 +359,19 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
   };
 
   return {
-    history: startHistory(initialGame),
-    game: initialGame,
+    history: initialHistory,
+    game: initialHistory.present,
+    commands: saved?.commands ?? [],
+    started: saved !== null,
+    menuOpen: true,
+    helpOpen: false,
+    settings: initialSettings,
+    feed: null,
     hoveredTile: null,
     selectedTile: null,
     armed: null,
     drag: null,
-    hotseat: false,
+    hotseat: saved?.hotseat ?? false,
     aiTurn: null,
     aiFast: false,
     aiMove: null,
@@ -321,10 +384,19 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     lastEvents: [],
     lastError: null,
 
-    newGame(seed) {
-      const game = createGame({ seed });
+    newGame({ seed, ais }) {
+      const count = Math.min(MAX_AIS, Math.max(1, Math.round(ais)));
+      const game = createGame({ seed, players: count + 1 });
       writeSeedToUrl(game.map.seed);
+      const settings = { ...get().settings, ais: count };
+      saveSettings(settings);
       setHistory(startHistory(game), {
+        commands: [],
+        started: true,
+        menuOpen: false,
+        helpOpen: false,
+        settings,
+        feed: null,
         selectedTile: null,
         aiTurn: null,
         aiFast: false,
@@ -338,6 +410,25 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
       });
     },
 
+    resume() {
+      set({ started: true, menuOpen: false });
+    },
+
+    setMenuOpen(open) {
+      // Before the first game starts the menu stays (the map behind it is a preview).
+      if (open || get().started) set({ menuOpen: open, armed: null, drag: null });
+    },
+
+    setHelpOpen(open) {
+      set({ helpOpen: open });
+    },
+
+    setMuted(muted) {
+      const settings = { ...get().settings, muted };
+      saveSettings(settings);
+      set({ settings });
+    },
+
     dispatch(command) {
       const state = get();
       // The screen waits while the AI plays.
@@ -349,6 +440,8 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
       }
       const { history, events } = applyToHistory(state.history, command);
       setHistory(history, {
+        commands: withCommand(command),
+        feed: feedOf(events, 'human', state.drag !== null),
         lastEvents: events,
         news: withNews(events),
         lastError: null,
@@ -374,13 +467,19 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
 
     undo() {
       const state = get();
-      if (canUndoTurn(state)) setHistory(undo(state.history), { lastEvents: [], lastError: null });
+      if (canUndoTurn(state)) {
+        setHistory(undo(state.history), {
+          commands: state.commands.slice(0, -1),
+          lastEvents: [],
+          lastError: null,
+        });
+      }
     },
 
     undoTurn() {
       const state = get();
       if (canUndoTurn(state)) {
-        setHistory(undoTurn(state.history), { lastEvents: [], lastError: null });
+        setHistory(undoTurn(state.history), { commands: [], lastEvents: [], lastError: null });
       }
     },
 
@@ -438,11 +537,15 @@ export const gameStore = createStore<GameStoreState>()((set, get) => {
     endDrag(tile) {
       const { drag, dispatch } = get();
       if (!drag) return;
-      set({ drag: null });
-      if (tile === null) return;
-      if (actingTile(drag.source) === tile) return;
+      if (tile === null || actingTile(drag.source) === tile) {
+        set({ drag: null });
+        return;
+      }
+      // Dispatch still sees the drag (a dropped unit does not slide) and clears it.
       if (dispatch(placeCommand(drag.source, tile))) {
         set({ selectedTile: afterUse(drag.source, tile) });
+      } else {
+        set({ drag: null });
       }
     },
 

@@ -106,7 +106,7 @@ Binalar kendi karosuna ve **6 komşusuna** bakarak üretir:
 | Bina | Üretim `[TASLAK]` |
 |---|---|
 | Çiftlik (ova) | Kendisi + her komşu sahipli ova için +1 yiyecek |
-| Kereste ocağı (orman kenarı) | Her komşu sahipli orman için +1 malzeme |
+| Kereste ocağı (orman kenarı) | Kendisi 1 + her komşu sahipli orman için +1 malzeme |
 | Taş ocağı (tepe) | Her komşu tepe/dağ için +1 malzeme (daha pahalı, daha verimli) |
 | Altın madeni (damarlı tepe) | Sabit +3 altın |
 | İskele (kıyı) | Her komşu su karosu için +1 yiyecek |
@@ -268,7 +268,7 @@ Hover/sürükleme sırasında hedef karoda **kalkan ikonları**: kim, hangi gü�
 | Çağ | Maliyet `[TASLAK]` | Açtıkları |
 |---|---|---|
 | Karanlık | — | İşçi, Milis, Okçu, Çiftlik, Kereste ocağı, Altın madeni, Ahşap çit, Kışla, Atış alanı |
-| Feodal | 50A / 30Y / 20M | Sv3 birleştirme, Köprü, Taş sur, Kapı, Kule, Ahır (süvari hattı), Taş ocağı, İskele, Balıkçı, Pazar, **Atölye, Koçbaşı** |
+| Feodal | 40A / 20Y / 15M | Sv3 birleştirme, Köprü, Taş sur, Kapı, Kule, Ahır (süvari hattı), Taş ocağı, İskele, Balıkçı, Pazar, **Atölye, Koçbaşı** |
 | Kale | 120A / 80Y / 60M | Mühendis, tarifler (Şövalye, Atlı okçu), Nakliye, Kale |
 | İmparatorluk | 250A / 150Y / 120M | Mancınık, Trebuchet, Sv4 birimler, son tarifler |
 
@@ -343,6 +343,7 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 - **Birim sürükleme:** Geçerli hedefler vurgulanır, kalkan önizlemesi, birleştirme sonucu önizlemesi.
 - **Tur içinde sınırsız geri al** (deterministik motor sayesinde).
 - **Ansiklopedi:** Birimler, tarifler, binalar, çağlar.
+- **Menü:** Devam et, yeni oyun (tohum, 1-3 AI), ansiklopedi, ses; oyun tarayıcıya kendiliğinden kaydedilir (karar 77-78).
 
 ---
 
@@ -463,3 +464,11 @@ Gelir, Pazar yerinin bulunduğu **bölgenin kasasına** gider → uzak ticaret k
 | 74 | AI turunun gösterimi | Kısa aralıklarla hamle hamle oynar, son hamle haritada vurgulanır, AI'ların aldığı karolar sıra insana gelene dek işaretli; "Oyuncu N oynuyor · Atla" şeridi (Atla kalan AI turlarını beklemeden oynatır); AI oynarken insan komut veremez; kamera yerinde kalır, sıra insana dönünce başkente gider | Anında; kamera AI'yı izler |
 | 75 | Başlangıç ormanı | Her başlangıç toprağında en az 1 orman (yoksa kereste ocağı + kışla başlangıç malzemesini aşar, malzeme kilitlenmesi) | Ortalama kadar |
 | 76 | Başlangıç yerleri | Yalnızca en büyük kara parçasında (dere köprüyle geçilebilir sayılır; dağ ve suyla ayrılmış cepler aday değil) — v0.1'de gemi yok, adadaki oyuncuya ulaşılamaz | Her kara karosu |
+| 77 | Yeni oyun | Menüden: tohum (rakam ya da herhangi bir metin) + 1-3 AI rakip; insan her zaman Oyuncu 1 (Kırmızı); hotseat yalnızca debug panelinde | Oyuncu sayısı/renk seçimi, zorluk |
+| 78 | Kayıt | Tek otomatik kayıt yeri (localStorage): tur başı durumu + turun komutları, yüklerken yeniden oynatılır (geri alma korunur); her değişiklikte ve sayfa kapanırken; oyun bitince silinir. Yeni oyun kaydın yerini alır | Çok yuvalı kayıt, yalnız tur başında kayıt |
+| 79 | Debug paneli | Yayında gizli, adrese `?debug` eklenince açılır | Her zaman görünür, tamamen kaldırılır |
+| 80 | Animasyonlar | Kısa ve yalnızca görsel (durum hemen değişir): birim kayar (sürüklenerek bırakılan kaymaz), alınan birim belirir, alınan karo yeni sahibinin rengiyle parlar, ölen birim söner, bina/yapı/birleşme halkası, ok atışı, çağ ve fetih dalgası; "Atla" ile hızlanan AI turlarında animasyon yok | Uzun savaş animasyonları, durum animasyon bitince değişir |
+| 81 | Ses | Ses dosyası yok, WebAudio ile sentez; komut başına en önemli olayın tek sesi, AI hamleleri daha kısık, atlanan AI turları sessiz (yalnızca "sıra sende"); menüden kapatılır, tercih saklanır | Müzik, ses dosyaları |
+| 82 | Denge geçişi (M8) | Kereste ocağı kendisi +1 malzeme (komşu ormanlara ek); Feodal 40A / 20Y / 15M. 50 tohumlu AI maçlarında (4 oyuncu): kışla ~5. tur (önce hep 8.), Feodal ~11-13. tur (oyuncuların ~%97'si; önce %10), maç ~25 tur, kazananlar sıraya göre dengeli | Başlangıç malzemesini artırmak (kışlayı 4. tura çekiyor ama Feodal 10. tura iniyor) |
+| 83 | Yayın | GitHub Pages, açık repo; `main`e her push GitHub Actions ile denetlenip (lint, tip, test) derlenir ve yayınlanır | Netlify, Vercel |
+| 84 | AI çağ birikimi | Başkent bölgesi yalnızca birikimde eksik kalan kaynağa ağırlık verir (eksik yiyecekse çiftlik, eksik malzemeyse kereste); ahır ve atölye değerli (AI süvari kullanır) | Birikim boyunca yiyecek ve malzemeye birlikte ağırlık |

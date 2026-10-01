@@ -162,9 +162,9 @@ describe('production by neighborhood (GDD 4.3)', () => {
     expect(buildingOutput(f.state, f.tile(1, 1), 'farm', 0)).toEqual(res(0, 7));
   });
 
-  it('lumber camp: every own forest neighbor', () => {
-    expect(output('A*  fA  A   f   .', 'lumberCamp', 2)).toEqual(res(0, 0, 1));
-    expect(output('fA  hA  fA  A*', 'lumberCamp', 1)).toEqual(res(0, 0, 2));
+  it('lumber camp: 1 plus every own forest neighbor', () => {
+    expect(output('A*  fA  A   f   .', 'lumberCamp', 2)).toEqual(res(0, 0, 2));
+    expect(output('fA  hA  fA  A*', 'lumberCamp', 1)).toEqual(res(0, 0, 3));
   });
 
   it('quarry: every own hill and every mountain around it', () => {

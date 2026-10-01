@@ -75,7 +75,7 @@ export const BUILDING_LABELS: Readonly<Record<BuildingKind, string>> = {
 /** What a building does and where it stands (GDD 5), for tooltips. */
 export const BUILDING_HINTS: Readonly<Record<BuildingKind, string>> = {
   farm: 'Ovaya kurulur. 1 yiyecek + komşu her kendi ovan için +1.',
-  lumberCamp: 'Ormana komşu ova ya da tepeye kurulur. Komşu her kendi ormanın için +1 malzeme.',
+  lumberCamp: 'Ormana komşu ova ya da tepeye kurulur. 1 malzeme + komşu her kendi ormanın için +1.',
   quarry: 'Tepeye kurulur. Komşu her kendi tepen ve her dağ için +1 malzeme.',
   goldMine: 'Damarlı tepeye kurulur. +3 altın, bakımı yok.',
   barracks: 'Ovaya kurulur. Bölgede piyade alımını açar.',

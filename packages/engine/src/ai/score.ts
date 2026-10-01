@@ -109,10 +109,10 @@ export function foodValue(view: AiView, economy: RegionEconomy): number {
       : economy.foodNet < food.comfortNet && soldiers
         ? food.low
         : food.surplus;
-  return economy.capital && view.saving ? value * AI.age.savingBoost : value;
+  return economy.shortfall.food > 0 ? value * AI.age.savingBoost : value;
 }
 
-export function materialsValue(view: AiView, economy: RegionEconomy): number {
+export function materialsValue(economy: RegionEconomy): number {
   const { materials } = AI;
   const value =
     economy.materialsIncome <= 0
@@ -120,7 +120,7 @@ export function materialsValue(view: AiView, economy: RegionEconomy): number {
       : economy.materialsIncome < materials.plentyIncome
         ? materials.low
         : materials.plenty;
-  return economy.capital && view.saving ? value * AI.age.savingBoost : value;
+  return economy.shortfall.materials > 0 ? value * AI.age.savingBoost : value;
 }
 
 export function resourceValue(
@@ -129,7 +129,7 @@ export function resourceValue(
   resource: keyof Resources,
 ): number {
   if (resource === 'food') return foodValue(view, economy);
-  if (resource === 'materials') return materialsValue(view, economy);
+  if (resource === 'materials') return materialsValue(economy);
   return AI.goldPerTurn;
 }
 
@@ -434,7 +434,7 @@ export function buildScore(
   if (special === null) return null;
   const perTurn =
     output.food * foodValue(view, economy) +
-    output.materials * materialsValue(view, economy) +
+    output.materials * materialsValue(economy) +
     (output.gold - spec.upkeep) * AI.goldPerTurn;
   if (spec.yield && perTurn <= 0) return null;
   let score = perTurn * AI.buildHorizon - materialsCost(economy, spec.cost) + special;

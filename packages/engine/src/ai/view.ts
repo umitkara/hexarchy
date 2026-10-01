@@ -54,6 +54,11 @@ export interface RegionEconomy {
   readonly forecast: RegionTurnStart;
   /** What may be spent now: the treasury less the age savings (capital region, saving). */
   readonly spendable: Resources;
+  /**
+   * What the age savings still lack (capital region, saving; zero otherwise): only these
+   * resources are worth more while saving, and only their producers may use the savings.
+   */
+  readonly shortfall: Resources;
   /** Food per turn after unit upkeep. */
   readonly foodNet: number;
   /** Gold per turn after building upkeep. */
@@ -323,6 +328,11 @@ export function analyze(state: GameState, personality?: Personality): AiView {
         gold: Math.max(0, treasury.gold - reserve.gold),
         food: Math.max(0, treasury.food - reserve.food),
         materials: Math.max(0, treasury.materials - reserve.materials),
+      },
+      shortfall: {
+        gold: Math.max(0, reserve.gold - treasury.gold),
+        food: Math.max(0, reserve.food - treasury.food),
+        materials: Math.max(0, reserve.materials - treasury.materials),
       },
       foodNet: f.income.food - f.unitUpkeep,
       goldNet: f.income.gold - f.buildingUpkeep,

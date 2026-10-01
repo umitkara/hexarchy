@@ -837,18 +837,26 @@ body {
   }
 
   /* Phones: keep the map visible; the HUD shrinks to the essentials. */
-  .title-panel,
   .tile-coords {
     display: none;
+  }
+
+  /* Phones: the turn panel takes the first row; menu buttons share the second. */
+  .turn-panel {
+    order: -1;
   }
 
   .hud-panel {
     padding: 8px 10px;
   }
 
-  .turn-panel,
-  .tile-info {
+  .turn-panel {
     flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .tile-info {
+    flex: 1 1 0;
     justify-content: space-between;
   }
 
@@ -932,5 +940,360 @@ body {
   .recruit .recruit-button,
   .build .recruit-button {
     font-size: 0.8rem;
+  }
+}
+
+/* Modals (menu, encyclopedia): catch the pointer, unlike the rest of the HUD. */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgb(8 12 18 / 0.55);
+  pointer-events: auto;
+  animation: fade-in 160ms ease-out;
+}
+
+.modal-backdrop > .hud-panel {
+  animation: rise-in 200ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
+.modal-header,
+.menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--accent);
+}
+
+.menu {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 420px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 20px 22px;
+  overflow-y: auto;
+  background: rgb(20 27 36 / 0.95);
+}
+
+.menu-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.menu-tagline,
+.menu-note,
+.menu-foot {
+  margin: 0;
+}
+
+.menu-foot {
+  font-size: 0.8rem;
+}
+
+.menu-continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  font-size: 1.1rem;
+}
+
+.menu-continue-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.menu-new {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+
+.menu-new h2 {
+  margin: 0;
+}
+
+.menu-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-field-label {
+  font-weight: 600;
+}
+
+.seed-input {
+  display: flex;
+  gap: 6px;
+}
+
+.seed-input .hud-button {
+  padding: 0 12px;
+  font-size: 1.2rem;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: rgb(0 0 0 / 0.3);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+
+.segment {
+  min-width: 56px;
+  min-height: 40px;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.segment[aria-checked='true'] {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.menu-row {
+  display: flex;
+  gap: 8px;
+}
+
+.menu-row .hud-button {
+  flex: 1;
+}
+
+.title-panel {
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.title-button {
+  margin: 0;
+  font-weight: 700;
+}
+
+/* Encyclopedia: tabs over a scrolling body. */
+.help {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 640px;
+  max-width: 100%;
+  height: min(720px, 100%);
+  padding: 16px 18px;
+  background: rgb(20 27 36 / 0.96);
+}
+
+.help-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.help-tab {
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.help-tab[aria-selected='true'] {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.help-tab:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.help-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  line-height: 1.45;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.help-body h3 {
+  margin: 12px 0 2px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.help-body p {
+  margin: 2px 0;
+}
+
+.help-text > h3:first-child,
+.help-text > p:first-child {
+  margin-top: 0;
+}
+
+.help-text ul {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+
+.help-text li {
+  margin: 3px 0;
+}
+
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.help-item h3 {
+  margin: 0;
+}
+
+.help-item > svg {
+  margin-top: 2px;
+}
+
+.help-terrain {
+  list-style: none;
+  padding: 0;
+}
+
+@media (max-width: 600px) {
+  .menu {
+    padding: 16px 14px;
+  }
+
+  .menu-title {
+    font-size: 1.6rem;
+  }
+
+  .help {
+    height: 100%;
+    padding: 12px;
+  }
+
+  .hud-title {
+    display: none;
+  }
+}
+
+/* Phones in landscape: little height, so the top HUD keeps to one compact row. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hud-panel {
+    padding: 6px 10px;
+  }
+
+  .hud-title,
+  .tile-coords,
+  .brush-label,
+  .age-long,
+  .turn-info .hud-meta,
+  .button-text {
+    display: none;
+  }
+
+  .age-short,
+  .button-icon {
+    display: inline;
+  }
+
+  .button-icon {
+    font-size: 1.25rem;
+  }
+
+  .turn-panel {
+    gap: 8px;
+  }
+
+  .turn-panel .hud-button {
+    padding: 0 12px;
+  }
+
+  .region-panel,
+  .age-panel {
+    max-height: calc(100dvh - 90px);
+  }
+
+  .menu {
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .menu-title {
+    font-size: 1.4rem;
+  }
+
+  .help {
+    height: 100%;
+    padding: 12px;
   }
 }

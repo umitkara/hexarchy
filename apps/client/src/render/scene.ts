@@ -18,12 +18,16 @@ import { canControl, gameStore, isEdgeSource, type GameStoreState } from '../sto
 import { drawAiMoves } from './aiGraphics';
 import { Camera } from './camera';
 import { drawBuildings } from './buildingGraphics';
+import { Effects } from './effects';
 import { createLayers } from './layers';
 import { drawEdges, drawHover, drawTerrain, TILE_SIZE } from './mapGraphics';
 import { drawStructures } from './structureGraphics';
 import { drawTargets, ShieldPreview } from './targetGraphics';
 import { drawCenters, drawSelection, drawTerritory } from './territoryGraphics';
 import { drawUnits } from './unitGraphics';
+
+/** Duration of the camera glide to the capital (ms). */
+const GLIDE_MS = 450;
 
 /** Within this share of the tile size from the unit's tile center, no side is picked. */
 const EDGE_PICK_INNER = 0.35;
@@ -88,6 +92,11 @@ export function createScene(app: Application): () => void {
   layers.buildings.addChild(centers, buildings);
   const units = new Graphics();
   layers.units.addChild(units);
+  const redrawUnits = () => {
+    const state = gameStore.getState();
+    drawUnits(units, state.game, draggedFrom(state), effects.hidden);
+  };
+  const effects: Effects = new Effects(layers.effects, app.ticker, redrawUnits);
   const aiMoves = new Graphics();
   const targets = new Graphics();
   const selection = new Graphics();
@@ -123,10 +132,38 @@ export function createScene(app: Application): () => void {
     if (!previous || !sameShape(previous.shape, map.shape)) camera.fit();
   };
 
+  /** Glides the view to a world point; a pan or zoom by the player stops it. */
+  let glide: (() => void) | null = null;
+  const stopGlide = () => {
+    if (glide) app.ticker.remove(glide);
+    glide = null;
+  };
+  const glideTo = (target: Point) => {
+    stopGlide();
+    const from = camera.center;
+    const start = performance.now();
+    let expected = from;
+    const step = () => {
+      const now = camera.center;
+      // Moved by the player since the last frame: hand the camera back.
+      if (Math.hypot(now.x - expected.x, now.y - expected.y) > 0.5) {
+        stopGlide();
+        return;
+      }
+      const t = Math.min(1, (performance.now() - start) / GLIDE_MS);
+      const k = t * t * (3 - 2 * t);
+      camera.centerOn({ x: from.x + (target.x - from.x) * k, y: from.y + (target.y - from.y) * k });
+      expected = camera.center;
+      if (t >= 1) stopGlide();
+    };
+    glide = step;
+    app.ticker.add(step);
+  };
+
   const centerOnCapital = (game: GameState) => {
     const capital = capitalOf(game, game.currentPlayer);
     if (capital !== undefined) {
-      camera.centerOn(axialToPixel(mapGrid(game.map).coord(capital), TILE_SIZE));
+      glideTo(axialToPixel(mapGrid(game.map).coord(capital), TILE_SIZE));
     }
   };
 
@@ -136,7 +173,7 @@ export function createScene(app: Application): () => void {
   drawCenters(centers, initial.game);
   drawBuildings(buildings, initial.game);
   drawStructures(structures, initial.game);
-  drawUnits(units, initial.game, null);
+  drawUnits(units, initial.game, null, effects.hidden);
   drawSelection(selection, initial.game, initial.selectedTile);
   drawAiMoves(aiMoves, initial.game, initial.aiTaken, initial.aiMove);
   drawHover(hover, initial.game.map, initial.hoveredTile, edgeFrom(initial));
@@ -161,8 +198,15 @@ export function createScene(app: Application): () => void {
       drawCenters(centers, game);
       drawBuildings(buildings, game);
     }
+    // Animations first: they decide which units the units layer leaves out for now.
+    if (state.feed !== previous.feed) {
+      if (state.feed && !state.aiFast) effects.play(state.feed, old, game);
+      else effects.clear();
+    } else if (game !== old) {
+      effects.clear();
+    }
     if (layoutChanged || unitsChanged || draggedFrom(state) !== draggedFrom(previous)) {
-      drawUnits(units, game, draggedFrom(state));
+      drawUnits(units, game, draggedFrom(state), effects.hidden);
     }
     if (game !== old || activeSource(state) !== activeSource(previous)) {
       drawTargets(targets, game, activeSource(state));
@@ -285,6 +329,8 @@ export function createScene(app: Application): () => void {
     unregisterPicker();
     detachControls();
     unsubscribe();
+    stopGlide();
+    effects.destroy();
     world.destroy({ children: true });
     preview.container.destroy({ children: true });
   };
